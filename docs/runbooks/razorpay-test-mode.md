@@ -25,6 +25,17 @@ python -m scripts.setup_test_subscription --amount-paise 99900
 
 Note the `subscription_id` and open the printed authorisation link.
 
+**If this returns 401 on plan creation**, Subscriptions is not enabled on the
+account. Razorpay gates it behind full account activation, so it is not a
+self-serve toggle and the product does not appear in the dashboard until KYC is
+complete. The tell is that `/v1/plans` and `/v1/subscriptions` answer 401 while
+`/v1/payments`, `/v1/orders` and `/v1/invoices` all answer 200 with the same
+credentials — the keys are fine, the product is not enabled.
+
+Use `scripts/setup_test_order.py` in the meantime: a failed payment on an
+ordinary order emits `payment.failed`, which carries the same error reason,
+source and step, and which the receiver maps to the identical `FailureEvent`.
+
 ## 3. Authorise the mandate
 
 Open the link and pay with a Razorpay test card. The subscription moves
@@ -42,7 +53,7 @@ uvicorn recoup.ingest.webhook_app:app --port 8000
 Expose port 8000 with any tunnel you prefer, then in **Dashboard →
 Settings → Webhooks**, add the tunnel URL + `/webhooks/razorpay`, set the
 secret to your `RAZORPAY_WEBHOOK_SECRET`, and subscribe to
-`subscription.pending`.
+`subscription.pending` (and `payment.failed` if you are using the order route).
 
 Confirm the receiver is up:
 
