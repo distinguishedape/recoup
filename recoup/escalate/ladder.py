@@ -29,6 +29,22 @@ TIER_CHANNELS: dict[Tier, tuple[str, ...]] = {
 
 TERMINAL_ONLY_CLASSES = frozenset({FailureClass.MANDATE_REVOKED})
 
+LADDER_GOVERNED_TYPES = CONTACT_ACTION_TYPES
+"""The ladder governs how loudly we talk to a customer, and nothing else.
+
+Every tier in the design is defined by a channel -- notify by email, request
+action by email and SMS, final notice by email and SMS, terminal by nothing at
+all. A charge retry has no channel and the customer never sees it, so it has no
+place on a scale of contact intensity.
+
+Gating retries by tier was a real defect and an easy one to miss: the
+deterministic planner put every action at tier one, so the two could never
+disagree. A planner that placed retries a tier above the notification -- which
+the model did -- had those retries silently killed whenever the notification
+was blocked for falling outside the contact window. Charge attempts are bounded
+by the per-cause budget, which is the thing that was always meant to bound
+them."""
+
 
 class LadderState(BaseModel):
     subscription_id: str

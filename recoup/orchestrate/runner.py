@@ -23,6 +23,7 @@ from recoup.audit.log import AuditLog, new_record
 from recoup.classify.engine import classify
 from recoup.clock.virtual import VirtualClock
 from recoup.escalate.ladder import (
+    LADDER_GOVERNED_TYPES,
     LadderState,
     assign_terminal,
     is_exhausted,
@@ -192,7 +193,7 @@ def run_recoup_arm(
             )
             continue
 
-        if not may_enter(state, action.tier):
+        if action.type in LADDER_GOVERNED_TYPES and not may_enter(state, action.tier):
             blocked_count[sub_id] += 1
             audit.append(
                 new_record(

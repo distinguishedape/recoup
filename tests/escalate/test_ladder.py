@@ -162,3 +162,17 @@ def test_advancement_beyond_the_starting_tier_is_still_earned_by_execution():
 def test_a_starting_tier_does_not_open_tiers_above_it():
     s = state(starting_tier=Tier.T1_NOTIFY)
     assert may_enter(s, Tier.T2_REQUEST_ACTION) is False
+
+
+def test_the_ladder_governs_contact_and_nothing_else():
+    # Every tier is defined by a channel. A charge retry has no channel and the
+    # customer never sees it, so it does not belong on a scale of contact
+    # intensity. Gating retries by tier meant a notification blocked for being
+    # outside the contact window silently killed the retries behind it.
+    from recoup.escalate.ladder import LADDER_GOVERNED_TYPES
+
+    assert ActionType.SEND_MESSAGE in LADDER_GOVERNED_TYPES
+    assert ActionType.REQUEST_INSTRUMENT_UPDATE in LADDER_GOVERNED_TYPES
+    assert ActionType.RETRY_CHARGE not in LADDER_GOVERNED_TYPES
+    assert ActionType.STOP not in LADDER_GOVERNED_TYPES
+    assert ActionType.ESCALATE_MANUAL_REVIEW not in LADDER_GOVERNED_TYPES

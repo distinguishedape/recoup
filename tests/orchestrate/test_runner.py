@@ -242,3 +242,46 @@ def test_some_dead_card_subjects_recover_once_they_supply_a_new_instrument(audit
     ]
     recovered = [o for o in invalid if o.terminal is TerminalState.RECOVERED]
     assert recovered, "the instrument-update intervention recovered nobody"
+
+
+def test_a_blocked_notification_does_not_also_kill_the_retries_behind_it(audit):
+    # Regression. A planner that placed retries a tier above the notification
+    # had every retry blocked as tier_not_open whenever the notification fell
+    # outside the contact window. The deterministic planner puts everything at
+    # tier one, so only a differently-tiered plan exposed it.
+    from recoup.models.core import Action, Classification, FailureEvent
+    from recoup.models.enums import Tier
+    from recoup.plan import llm_planner
+
+    def tiered_plan(event, classification, client, now):
+        from recoup.models.core import InterventionPlan
+
+        return InterventionPlan(
+            subscription_id=event.subscription_id,
+            failure_class=classification.failure_class,
+            actions=[
+                Action(
+                    action_id=f"{event.subscription_id}:act:0",
+                    subscription_id=event.subscription_id,
+                    type=ActionType.RETRY_CHARGE,
+                    scheduled_at=now + timedelta(hours=24),
+                    tier=Tier.T2_REQUEST_ACTION,
+                    channel=None,
+                    template_id=None,
+                    free_text=None,
+                    reason="a retry the planner placed at tier two",
+                )
+            ],
+        )
+
+    import recoup.orchestrate.runner as runner_module
+
+    original = runner_module.build_intervention_plan
+    runner_module.build_intervention_plan = tiered_plan
+    try:
+        result = run_recoup_arm(config(cohort_size=60, seed=3), audit)
+    finally:
+        runner_module.build_intervention_plan = original
+
+    executed = [r for r in audit.all() if r.stage == "execute"]
+    assert executed, "every retry was blocked because it sat above the starting tier"
