@@ -1,0 +1,36 @@
+{
+  "entity": "event",
+  "account_id": "acc_TESTACCOUNT",
+  "event": "subscription.pending",
+  "contains": ["subscription", "payment"],
+  "payload": {
+    "subscription": {
+      "entity": {
+        "id": "sub_TEST0001",
+        "entity": "subscription",
+        "plan_id": "plan_TEST0001",
+        "customer_id": "cust_TEST0001",
+        "status": "pending",
+        "paid_count": 3,
+        "current_start": 1756100000,
+        "current_end": 1758692000
+      }
+    },
+    "payment": {
+      "entity": {
+        "id": "pay_TEST0001",
+        "entity": "payment",
+        "amount": 99900,
+        "currency": "INR",
+        "status": "failed",
+        "invoice_id": "inv_TEST0001",
+        "error_code": "BAD_REQUEST_ERROR",
+        "error_description": "Your payment did not go through as it was declined by the bank. Try another payment method.",
+        "error_source": "bank",
+        "error_step": "payment_authorization",
+        "error_reason": "insufficient_funds"
+      }
+    }
+  },
+  "created_at": 1756110000
+}
