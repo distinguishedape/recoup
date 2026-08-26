@@ -34,7 +34,7 @@ from recoup.execute.rail import SimulatedRail
 from recoup.ingest.cohort import CohortSpec, generate_cohort
 from recoup.llm.client import LLMClient
 from recoup.models.core import Action, Subscription
-from recoup.models.enums import ActionType, Band, FailureClass, TerminalState
+from recoup.models.enums import ActionType, Band, FailureClass, TerminalState, Tier
 from recoup.plan.budgets import CONTACT_ACTION_TYPES
 from recoup.plan.llm_planner import plan as build_intervention_plan
 from recoup.policy.engine import authorize
@@ -67,6 +67,8 @@ class SubjectOutcome(BaseModel):
     cost_paise: int
     actions_executed: int
     actions_blocked: int
+    first_failure_at: datetime | None = None
+    recovered_at: datetime | None = None
 
 
 class RunResult(BaseModel):
@@ -106,7 +108,12 @@ def run_recoup_arm(
         CohortSpec(size=config.cohort_size, seed=config.seed), config.start_at
     )
     clock = VirtualClock(config.start_at)
-    rail = SimulatedRail(cohort.subjects, config.band, random.Random(config.seed + 1))
+    rail = SimulatedRail(
+        cohort.subjects,
+        config.band,
+        random.Random(config.seed + 1),
+        paired_seed=config.seed,
+    )
     executor = Executor(rail, SimulatedDispatcher(), audit, clock)
 
     subscriptions: dict[str, Subscription] = {s.subscription_id: s for s in cohort.subscriptions}
@@ -115,9 +122,12 @@ def run_recoup_arm(
     executed_count: dict[str, int] = defaultdict(int)
     blocked_count: dict[str, int] = defaultdict(int)
     spend: dict[str, int] = defaultdict(int)
+    first_failure_at: dict[str, datetime] = {}
+    recovered_at: dict[str, datetime] = {}
 
     for event in cohort.events:
         sub_id = event.subscription_id
+        first_failure_at[sub_id] = event.occurred_at
         audit.append(
             new_record(sub_id, event.occurred_at, "ingest", event.model_dump(mode="json"))
         )
@@ -127,13 +137,19 @@ def run_recoup_arm(
                 sub_id, event.occurred_at, "classify", classification.model_dump(mode="json")
             )
         )
+        intervention = build_intervention_plan(
+            event, classification, llm_client, event.occurred_at
+        )
+        starting_tier = (
+            min(action.tier for action in intervention.actions)
+            if intervention.actions
+            else Tier.T1_NOTIFY
+        )
         states[sub_id] = LadderState(
             subscription_id=sub_id,
             failure_class=classification.failure_class,
             opted_out=sub_id in config.opted_out_ids,
-        )
-        intervention = build_intervention_plan(
-            event, classification, llm_client, event.occurred_at
+            starting_tier=starting_tier,
         )
         audit.append(
             new_record(
@@ -229,6 +245,8 @@ def run_recoup_arm(
         spend[sub_id] += result.cost_paise
         if context.instrument_updated and action.type is ActionType.RETRY_CHARGE:
             state.post_update_charges_used += 1
+        if result.succeeded and action.type is ActionType.RETRY_CHARGE:
+            recovered_at.setdefault(sub_id, now)
         record_execution(state, action, result.succeeded)
         if action.type in CONTACT_ACTION_TYPES:
             last_contact[sub_id] = now
@@ -277,6 +295,8 @@ def run_recoup_arm(
                 cost_paise=spend[sub_id],
                 actions_executed=executed_count[sub_id],
                 actions_blocked=blocked_count[sub_id],
+                first_failure_at=first_failure_at.get(sub_id),
+                recovered_at=recovered_at.get(sub_id),
             )
         )
 

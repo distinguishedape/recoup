@@ -142,3 +142,23 @@ def test_every_tier_declares_its_channels():
     assert TIER_CHANNELS[Tier.T1_NOTIFY] == ("email",)
     assert "sms" in TIER_CHANNELS[Tier.T3_FINAL_NOTICE]
     assert TIER_CHANNELS[Tier.T4_TERMINAL] == ()
+
+
+def test_the_planner_chosen_starting_tier_is_enterable_without_lower_tiers_running():
+    # A dead card opens at T2: asking for a new instrument, not sending a
+    # neutral notice about a payment that was never going to succeed. Requiring
+    # T1 first would shut that intervention permanently, which it once did.
+    s = state(FailureClass.INSTRUMENT_INVALID, starting_tier=Tier.T2_REQUEST_ACTION)
+    assert may_enter(s, Tier.T2_REQUEST_ACTION) is True
+    assert may_enter(s, Tier.T3_FINAL_NOTICE) is False
+
+
+def test_advancement_beyond_the_starting_tier_is_still_earned_by_execution():
+    s = state(FailureClass.INSTRUMENT_INVALID, starting_tier=Tier.T2_REQUEST_ACTION)
+    record_execution(s, action(ActionType.SEND_MESSAGE, Tier.T2_REQUEST_ACTION), succeeded=True)
+    assert may_enter(s, Tier.T3_FINAL_NOTICE) is True
+
+
+def test_a_starting_tier_does_not_open_tiers_above_it():
+    s = state(starting_tier=Tier.T1_NOTIFY)
+    assert may_enter(s, Tier.T2_REQUEST_ACTION) is False

@@ -34,6 +34,7 @@ class LadderState(BaseModel):
     subscription_id: str
     failure_class: FailureClass
     current_tier: Tier = Tier.T1_NOTIFY
+    starting_tier: Tier = Tier.T1_NOTIFY
     executed_tiers: set[int] = Field(default_factory=set)
     contacts_sent: int = 0
     charge_retries_used: int = 0
@@ -51,7 +52,12 @@ def may_enter(state: LadderState, tier: Tier) -> bool:
         return False
     if state.failure_class in TERMINAL_ONLY_CLASSES or state.opted_out:
         return False
-    if tier is Tier.T1_NOTIFY:
+    if int(tier) <= int(state.starting_tier):
+        # The planner chooses where a subject enters the ladder, because the
+        # right opening move depends on the root cause: a dead card starts by
+        # asking for a new one, not by sending a neutral notice about a payment
+        # that was never going to succeed. Advancement *beyond* the opening
+        # tier is what must be earned by execution.
         return True
     return int(tier) - 1 in state.executed_tiers
 

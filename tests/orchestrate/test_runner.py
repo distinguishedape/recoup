@@ -213,3 +213,32 @@ def test_a_failing_policy_rule_halts_the_batch_rather_than_proceeding_ungated(au
     monkeypatch.setattr(engine_module, "RULES", (broken,))
     with pytest.raises(RuntimeError):
         run_recoup_arm(config(cohort_size=100), audit)
+
+
+def test_a_dead_card_actually_gets_asked_to_supply_a_new_one(audit):
+    # Regression: the ladder once required T1 to have executed before T2 could
+    # open, and the dead-card plan starts at T2, so every one of these subjects
+    # had its entire intervention blocked and the class recovered nothing.
+    result = run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    invalid = [
+        o for o in result.outcomes if o.failure_class is FailureClass.INSTRUMENT_INVALID
+    ]
+    assert invalid
+    requests = 0
+    for outcome in invalid:
+        requests += sum(
+            1
+            for r in audit.reconstruct(outcome.subscription_id)
+            if r.stage == "execute"
+            and r.payload["action_type"] == ActionType.REQUEST_INSTRUMENT_UPDATE.value
+        )
+    assert requests > 0, "no dead-card subject was ever asked for a new instrument"
+
+
+def test_some_dead_card_subjects_recover_once_they_supply_a_new_instrument(audit):
+    result = run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    invalid = [
+        o for o in result.outcomes if o.failure_class is FailureClass.INSTRUMENT_INVALID
+    ]
+    recovered = [o for o in invalid if o.terminal is TerminalState.RECOVERED]
+    assert recovered, "the instrument-update intervention recovered nobody"
