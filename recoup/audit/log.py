@@ -57,6 +57,14 @@ class AuditLog:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self._db_path)
+        # Write-ahead logging with a relaxed sync keeps the append-per-decision
+        # guarantee while removing an fsync from every single record. A cohort
+        # run writes thousands of rows and the default settings made that the
+        # dominant cost of the whole experiment. Records still survive a process
+        # crash; only an OS-level crash can lose the most recent ones, which is
+        # the right trade for an experiment log.
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.execute("PRAGMA synchronous = NORMAL")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
         self._jsonl_path = Path(jsonl_path) if jsonl_path else None
