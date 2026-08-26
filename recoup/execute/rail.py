@@ -14,6 +14,7 @@ The real Razorpay-backed implementation satisfies the same ``PaymentRail``
 protocol and is delivered by the ingestion plan.
 """
 
+import hashlib
 import random
 from datetime import datetime
 from typing import Protocol
@@ -40,6 +41,20 @@ _DECLINES: dict[FailureClass, tuple[str, str, str]] = {
 def canonical_decline(failure_class: FailureClass) -> tuple[str, str, str]:
     """The (reason, source, step) triple a subject of this class declines with."""
     return _DECLINES[failure_class]
+
+
+def subject_stream(paired_seed: int, subscription_id: str) -> random.Random:
+    """A random stream belonging to one subject in one experiment.
+
+    Paired comparison needs subject *n* to face identical luck in both arms. A
+    single shared stream cannot do that: the arms consume draws in different
+    orders and different quantities, so by the tenth subject the two arms are
+    comparing different dice. Deriving each subject's stream from
+    ``(seed, subscription_id)`` makes the draw sequence a property of the
+    subject rather than of the order the loop happened to visit them.
+    """
+    material = f"{paired_seed}:{subscription_id}".encode("utf-8")
+    return random.Random(int.from_bytes(hashlib.sha256(material).digest()[:8], "big"))
 
 
 class ChargeResult(BaseModel):
@@ -77,10 +92,20 @@ class SimulatedRail:
         subjects: dict[str, SimSubject],
         band: Band,
         rng: random.Random,
+        paired_seed: int | None = None,
     ) -> None:
         self._subjects = subjects
         self._band = band
         self._rng = rng
+        self._paired_seed = paired_seed
+        self._streams: dict[str, random.Random] = {}
+
+    def _stream(self, subscription_id: str) -> random.Random:
+        if self._paired_seed is None:
+            return self._rng
+        if subscription_id not in self._streams:
+            self._streams[subscription_id] = subject_stream(self._paired_seed, subscription_id)
+        return self._streams[subscription_id]
 
     def _subject(self, subscription_id: str) -> SimSubject:
         try:
@@ -96,7 +121,7 @@ class SimulatedRail:
             probability = retry_success_probability(
                 subject.latent_class, self._band, subject.attempts_made
             )
-        succeeded = self._rng.random() < probability
+        succeeded = self._stream(subscription_id).random() < probability
         subject.attempts_made += 1
         if succeeded:
             return ChargeResult(succeeded=True)
@@ -111,7 +136,9 @@ class SimulatedRail:
         subject = self._subject(subscription_id)
         if subject.instrument_updated:
             return True
-        converted = self._rng.random() < update_conversion_probability(self._band)
+        converted = self._stream(subscription_id).random() < update_conversion_probability(
+            self._band
+        )
         if converted:
             subject.instrument_updated = True
         return converted
