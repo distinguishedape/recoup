@@ -46,6 +46,14 @@ proposing more than the budget loses the whole plan rather than extending it.
 a revoked mandate, a risk block).
 - `delay_hours` must be between 0 and {MAX_DELAY_HOURS}.
 - At most {MAX_ACTIONS} actions.
+- Do not include a stop or an escalation alongside actions scheduled at or after
+it. A plan that stops and then retries is discarded entirely.
+
+Timing matters as much as choice of action, and the two causes differ sharply:
+- A bank or gateway outage clears in *hours*, not days. Retry within a few hours;
+waiting a day wastes the window in which a retry would have worked.
+- A funds shortfall tracks the customer's pay cycle. Retry after a day, then
+again around three days, which is where salary and transfer credits land.
 
 Reply with JSON only, in exactly this shape:
 {{"actions": [{{"type": "...", "delay_hours": 0, "tier": 1, "channel": "email" or null, \
@@ -115,6 +123,20 @@ def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) ->
     )
 
 
+TERMINAL_TYPES = frozenset({ActionType.STOP, ActionType.ESCALATE_MANUAL_REVIEW})
+
+
+def _stops_before_it_acts(actions: list[Action]) -> bool:
+    """True if a terminal action is scheduled at or before a non-terminal one."""
+    terminal_times = [a.scheduled_at for a in actions if a.type in TERMINAL_TYPES]
+    if not terminal_times:
+        return False
+    earliest_stop = min(terminal_times)
+    return any(
+        a.scheduled_at >= earliest_stop for a in actions if a.type not in TERMINAL_TYPES
+    )
+
+
 def propose_plan(
     event: FailureEvent,
     classification: Classification,
@@ -141,6 +163,15 @@ def propose_plan(
         if action is None:
             return None
         actions.append(action)
+
+    if _stops_before_it_acts(actions):
+        # "Stop now, then retry tomorrow" is not a plan, it is two plans
+        # disagreeing. A terminal action means the subject is finished, so
+        # anything scheduled at or after it cannot also be intended. The
+        # policy engine would have executed each action safely and the
+        # sequence would still have been nonsense, which is the difference
+        # between a gate that enforces permission and one that enforces sense.
+        return None
 
     proposed = InterventionPlan(
         subscription_id=event.subscription_id,

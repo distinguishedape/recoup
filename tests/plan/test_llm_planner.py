@@ -254,3 +254,85 @@ def test_a_proposal_exactly_on_budget_is_accepted(tmp_path):
     result = propose_plan(event(), classification(), client_returning(exact, tmp_path), NOW)
     assert result is not None
     assert len(result.actions) == 2
+
+
+def test_a_plan_that_stops_and_then_acts_is_rejected(tmp_path):
+    # The model really produced this: a stop at hour zero followed by retries
+    # the next day. Every action was individually permissible, so the policy
+    # gate would have run each one; the sequence was still nonsense.
+    incoherent = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "retry_charge",
+                    "delay_hours": 24,
+                    "tier": 1,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "retry tomorrow",
+                },
+                {
+                    "type": "stop",
+                    "delay_hours": 0,
+                    "tier": 4,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "and also stop now",
+                },
+            ]
+        }
+    )
+    assert propose_plan(event(), classification(), client_returning(incoherent, tmp_path), NOW) is None
+
+
+def test_a_stop_after_everything_else_is_fine(tmp_path):
+    coherent = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "retry_charge",
+                    "delay_hours": 24,
+                    "tier": 1,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "retry",
+                },
+                {
+                    "type": "stop",
+                    "delay_hours": 48,
+                    "tier": 4,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "then give up",
+                },
+            ]
+        }
+    )
+    result = propose_plan(event(), classification(), client_returning(coherent, tmp_path), NOW)
+    assert result is not None
+    assert len(result.actions) == 2
+
+
+def test_a_plan_of_only_a_stop_is_still_accepted(tmp_path):
+    only_stop = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "stop",
+                    "delay_hours": 0,
+                    "tier": 4,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "nothing to be done",
+                }
+            ]
+        }
+    )
+    result = propose_plan(
+        event(),
+        classification(FailureClass.MANDATE_REVOKED),
+        client_returning(only_stop, tmp_path),
+        NOW,
+    )
+    assert result is not None
+    assert [a.type for a in result.actions] == [ActionType.STOP]
