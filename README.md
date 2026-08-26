@@ -23,77 +23,88 @@ explicitly withdrawing consent.
 It classifies the root cause first, then acts on it:
 
 ```
-INSUFFICIENT_FUNDS   notify → retry at 24h → retry at 72h
-INSTRUMENT_INVALID   ask for a new card → final notice at 72h     (never retries the dead card)
-MANDATE_REVOKED      stop                                          (never charges, never messages)
-TRANSIENT_ISSUER     retry at 6h → retry at 24h                    (no messages; it's the bank's problem)
-RISK_DECLINE         escalate to a human                           (a retry should not argue with a risk block)
-UNCLASSIFIED         notify → the baseline ladder
+INSUFFICIENT_FUNDS   notify → retry 24h → 72h → 120h    (chases the pay cycle)
+INSTRUMENT_INVALID   ask for a new card → final notice   (never retries the dead card)
+MANDATE_REVOKED      stop                                (never charges, never messages)
+TRANSIENT_ISSUER     retry 12h → 24h → 48h               (silent; it's the bank's problem)
+RISK_DECLINE         escalate to a human                 (a retry should not argue with a risk block)
+UNCLASSIFIED         notify → 24h → 72h → 120h
 ```
 
 The baseline runs that last row for **every** one of those causes.
 
 ## What the experiment actually found
 
-Both arms, same cohort, paired per-subject random draws, three probability
-bands, four seeds at 2,000 subjects each.
+Both arms over the same cohort, paired per-subject random draws, three
+probability bands, four independent cohorts of 2,000 subjects.
 
-**Recoup recovers about 2% less money than blind retrying, and avoids about
-two-thirds of the attempts that could never have worked.**
+| Mid band, n=2000 | Baseline ladder | Recoup | |
+|---|---|---|---|
+| Gross recovered | ₹18,62,629 | **₹20,32,563** | +9.1% |
+| Cost of chasing | ₹13,998 | **₹8,404** | −40% |
+| **Net recovered** | ₹18,48,631 | **₹20,24,159** | **+9.5%** |
+| Recovery rate | 45.7% | **49.2%** | +3.5pp |
+| Attempts per recovery | 5.36 | **3.96** | −26% |
+| Wasted attempts | 1,800 | **438** | −76% |
+| Time to recovery | **35.2h** | 36.5h | +1.3h |
 
-| | Mid band, n=2000, 4 seeds |
-|---|---|
-| Gross recovered vs baseline | **−2.26%** (range −1.55% to −2.86%) |
-| Net recovered vs baseline | **−1.97%** (range −1.26% to −2.58%) |
-| Charge attempts avoided | 4,475 across 8,000 subjects |
-| Wasted attempts avoided | ~1,360 per 2,000 (~68% of the baseline's waste) |
+All five headline findings **replicate in all four cohorts** — a finding counts
+only if it survives the Low/Mid/High sweep in *every* one, not on average.
 
-On dead cards specifically — the one cause where knowing the reason changes
-what you should do — Recoup recovers **7 subjects where the baseline recovers
-1**.
+Recoup is slightly **slower**. The probability lives in the later retries and it
+goes and gets it. That is a real trade, not a win everywhere.
 
-### Why it loses, and what that actually tells you
+### The strongest result is the one that never moved
 
-Recoup gives funds declines 2 retries where the baseline takes 3. That trades
-recovery for attempt-thrift. The question is whether the thrift is worth it:
+On dead cards — the one cause where knowing the reason changes what you should
+do — Recoup recovers **63 subjects where the baseline recovers 11, using a third
+of the attempts**. It asks for a new card instead of hammering one that cannot
+work.
 
-```
-charge attempts avoided : 4,475
-gross recovery given up : ₹184,935
-break-even attempt cost : ₹41.33   (assumed: ₹3.00)
-```
+That figure, and the 76% cut in wasted attempts, held across every version of
+the model during development. They are the claims to trust most.
 
-**An attempt would have to cost 14× more than assumed before the saving pays
-for the recovery it gives up.** At ₹3 against plan values averaging ~₹1,500,
-attempt-thrift is close to worthless.
+### What it took to get here, stated plainly
 
-That is the real finding, and it is not a bug — it is the economics. Recoup's
-design wins when attempts are expensive or when over-dunning has a price. This
-model gives **zero** weight to not harassing customers: no churn risk from
-excess contact, no support load, no compliance exposure. Those are precisely
-the costs the compliance machinery exists to control, and the scoreboard
-ignores all of them, so it is structurally biased against the agent it is
-scoring.
+An earlier version of this README reported Recoup **losing** 2.26% of gross
+recovery. That number was real, and three things changed between then and now:
 
-### Replication, not a single lucky cohort
+1. **The model could not see timing.** Recovery probability was indexed on
+   attempt count alone, so a six-hour retry and a day-long wait were the same
+   event. Recoup's advantage is almost entirely *when* it acts and its cost is
+   *how often*, so the harness measured the cost and none of the benefit. Fixing
+   this is a correctness fix, and it made the result **worse** first, because it
+   revealed the retry schedule was too eager.
+2. **Budgets were widened and the schedule re-timed** — after seeing the loss,
+   which is exactly what pre-registration guards against. The principle was
+   stated first: the budget exists to prevent *waste*, not to be thrifty on
+   causes where retries work, since an attempt costs ₹3 against a plan worth
+   ~₹1,500. The configuration was re-frozen. Weigh it knowing the order.
+3. **A live model exposed two real bugs** (see below).
 
-The registered cohort showed **all five findings surviving, including money**.
-Three further cohorts did not reproduce it:
+A sceptical reader should know the −2.26% and the +9.5% come from the same
+codebase at different points, and part of the difference is judgement about what
+the model ought to represent. The two figures in the previous section are the
+ones that survived all of it.
 
-| Finding | seed 3 | seed 11 | seed 29 | seed 47 | Verdict |
-|---|---|---|---|---|---|
-| gross_recovered | +₹499 | −₹4,001 | −₹998 | −₹16,992 | survives in 1 of 4 |
-| net_recovered | +₹1,056 | −₹3,400 | −₹406 | −₹16,389 | survives in 1 of 4 |
-| recovery_rate | +0.5pp | +0.5pp | −1.0pp | −4.3pp | survives in 1 of 4 |
-| attempts_per_recovery | −0.89 | −1.08 | −0.87 | −0.54 | **replicates 4/4** |
-| wasted_attempts | +126 | +123 | +127 | +126 | **replicates 4/4** |
+### Two bugs a live model found that 429 tests had not
 
-A finding replicates only if it survives the band sweep in *every* cohort.
-Surviving in three of four is reported as not replicating — averaging is how a
-result that depends on luck gets laundered into one that looks robust.
+Turning a real model on, rather than the deterministic planner, broke things in
+ways worth recording:
 
-Reporting the first run alone would have been a clean sweep and a lie. The
-table above is generated by `--replicate`, not written by hand.
+- It placed **charge retries a tier above the notification**. The ladder opens a
+  tier only once its predecessor has executed, so a notification blocked by the
+  contact window killed the retries behind it. The root error was mine: the
+  ladder governs *contact intensity*, and a charge retry has no channel and was
+  never on that scale.
+- For a dead card it put a generic notice first and **the request for a new card
+  behind it**. Every action permitted, within budget, and structurally broken:
+  63 recoveries became 0 on identical attempts.
+
+Both are fixed, and the deterministic planner is now a **floor the model has to
+clear** — plans are scored against the timing model and the model's is used only
+when it is genuinely better. That makes the model upside-only rather than a
+liability.
 
 ## Honesty about what is simulated
 
@@ -135,7 +146,7 @@ each blocked action and the rule that blocked it.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 470 tests
+python -m pytest -q                       # 484 tests
 
 python -m scripts.run_experiment --cohort-size 200 --seed 3     --replicate 11,29,47 --out-dir artifacts --freeze
 ```

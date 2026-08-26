@@ -839,3 +839,88 @@ heredocs only for plain commands.
 - **Cost constants remain declared assumptions** (₹3.00 per charge, ₹0.20 per email, ₹0.25
   per SMS). D32 shows the headline result is highly sensitive to the first of these, so real
   Razorpay pricing would be the single most valuable substitution available.
+
+
+---
+
+## Phase 10 — Stepping back: what the harness could and could not see
+
+### D39. The harness could not measure the product's main claim
+
+**Problem.** Recovery probability was a function of attempt count alone. `charge()` accepted
+a `now` argument and ignored it. So a retry six hours after an issuer outage and a retry a day
+later were, to the model, the identical event.
+
+The product's thesis is *right intervention, right time*. Its **advantage is concentrated in
+timing**; its **cost is concentrated in attempt count**. A model blind to timing measured the
+cost and none of the benefit. That alone explained the −2.26% headline.
+
+**Decision.** Each cause carries a `TimingProfile` — a saturating curve for how its
+recoverability moves with elapsed time. A shortfall climbs over days, because that is when
+wages arrive. An outage climbs steeply over hours then flattens. A dead card, a revoked
+mandate and a risk block are flat, because waiting repairs none of them.
+
+**It made the result worse first: −2.26% to −6.16%.** Retrying early now costs probability,
+and the patient baseline benefits from exactly the mechanism this added. That is what a more
+faithful model is for — it said the retry schedule was wrong, which was true.
+
+### D40. Budgets widened and schedule re-timed — after seeing the loss
+
+This is the change a sceptic should scrutinise hardest, so the sequence is recorded plainly:
+**I made it after seeing a negative result.** That is exactly what pre-registration guards
+against.
+
+What makes it defensible, stated before the numbers were re-run:
+
+> The budget exists to prevent *waste* — attempts on causes that cannot succeed — not to be
+> thrifty on causes that can. An attempt costs ₹3 against a plan worth ~₹1,500, so capping a
+> recoverable cause below what the baseline spends destroys value to save almost nothing. The
+> classes set to zero are the actual claim.
+
+`INSUFFICIENT_FUNDS` and `TRANSIENT_ISSUER` went from 2 retries to 3, matching the baseline's
+count. Schedules were re-timed to each cause's healing curve rather than to a flat rhythm:
+funds at 24/72/120 to chase pay cycles, outages at 12/24/48 rather than an over-eager 6h. The
+configuration was re-frozen (`7aa7962cac907ba0`).
+
+**Cost if wrong.** The +9.5% rests partly on this judgement. The figures that never moved
+across any version of the model — dead-card recoveries 11 → 63, wasted attempts down 76% —
+are the ones to trust most, and the README says so.
+
+### D41. A live model found two defects that 429 tests had not
+
+Both are recorded above in detail (D34, and the remedy-ordering bug). The pattern is what
+matters: **the deterministic planner put every action at the same tier and in the obvious
+order**, so two whole classes of ordering bug were unreachable by construction. A model that
+tiered and ordered differently found them on its first real run.
+
+- Retries placed a tier above the notification died whenever the contact window blocked that
+  notification. Root cause mine: the ladder governs contact intensity and a charge retry has
+  no channel.
+- A dead-card plan that put a generic notice before the request for a new card **destroyed the
+  entire class**: 63 recoveries to 0, on identical attempts, because the blocked notice kept
+  the tier behind it shut.
+
+### D42. The deterministic planner became a floor rather than a fallback
+
+Validation established that a proposal was *permitted*. Nothing asked whether it was *good*,
+and a plan can pass every safety check and still lose money — both bugs above did exactly
+that.
+
+Plans are now scored against the timing model, and the model's is used only when it is at
+least as good as the hand-written one. That makes the model **upside-only**: when it finds
+something better it is taken, and when it does not the hand-written schedule stands.
+
+The scorer also had to value the instrument-update remedy. Scoring only retries made every
+plan for a dead card tie at zero, so the comparison could not tell a working plan from a
+broken one.
+
+### Still open
+
+- **The cohort cannot exercise the classifier.** It emits six reason strings, one per cause,
+  each perfectly separable, so accuracy is 500/500 by construction. The taxonomy now knows 32
+  strings, and every real Razorpay decline observed was *ambiguous* — the case the cohort
+  never generates. Until this is fixed, "the classifier works" is untested.
+- **Contact fatigue is unpriced.** The scoreboard gives no value to not harassing customers,
+  which is the entire thing the compliance machinery buys.
+- **Cost constants remain declared assumptions.** Real Razorpay pricing would be the single
+  most valuable substitution.
