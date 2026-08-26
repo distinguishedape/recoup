@@ -192,18 +192,48 @@ an action.
 For the live Razorpay path, see
 [`docs/runbooks/razorpay-test-mode.md`](docs/runbooks/razorpay-test-mode.md).
 
-## Where the AI sits
+## Where the AI sits, and what it is measurably worth
 
-The model proposes; deterministic policy disposes. A lookup table resolves 15
-of Razorpay's 17 decline reason strings — free, instant, and incapable of
-hallucinating. Only `card_declined` and `payment_failed`, which both describe
-themselves as "declined by the customer's bank" and nothing more, reach the
-model.
+The model proposes; deterministic policy disposes. A lookup table resolves 28
+of Razorpay's documented decline reasons — free, instant, and incapable of
+hallucinating. Only the handful Razorpay itself documents as *not disclosing
+the cause* reach the model.
 
-Whatever it returns is validated against closed enums and a template allowlist
-before anything acts on it. Asked to invent a failure class, retry a dead card
-five times, write its own threatening copy, or use an unregistered template, every
-proposal is rejected and the deterministic planner runs instead.
+**Classification accuracy, 2,000 subjects, realistic reason mix:**
+
+| | Accuracy |
+|---|---|
+| Table alone | 84.5% |
+| Table + model | **99.4%** |
+
+The model correctly resolves 298 declines the table refuses to guess at, on
+**six API calls** — identical evidence produces identical prompts and the cache
+collapses them. The 12 it misses are all one confusion between two
+gateway-sourced causes.
+
+**Its effect on money is weaker, and reported by the same strict rule as
+everything else:**
+
+```
+mean effect on net lift : +₹7,753
+spread                  : −₹2,889 to +₹17,581
+positive in             : 3 of 4 cohorts  →  does not replicate
+```
+
+A finding counts here only if it holds in *every* cohort. The AI's
+classification gain clears that bar. Its money contribution does not, and is
+reported as not replicating rather than as a mean that happens to be positive.
+
+The clearest thing it does earn: it finds dead cards hiding behind
+uninformative reason strings and routes them to a new-card request instead of
+retries that cannot work — **+6 recoveries, +₹8,494** on that cause alone.
+
+**Everything it returns is validated before anything acts on it.** Asked to
+invent a failure class, retry a dead card five times, write its own threatening
+copy, or use an unregistered template, every proposal is rejected and the
+deterministic planner runs instead. And since a permitted plan can still be a
+bad one, its schedule is scored against the timing model — the deterministic
+planner is a floor it has to clear, not merely a fallback.
 
 ## Layout
 
