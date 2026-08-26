@@ -172,8 +172,72 @@ def test_a_freshly_updated_instrument_may_not_be_charged_twice():
     assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
 
 
-def test_stopping_is_always_permitted():
+def test_stopping_is_always_permitted_by_every_single_rule():
     stop = charge(at_ist(3)).model_copy(update={"type": ActionType.STOP})
-    ctx = context(now=at_ist(3), opted_out=True, charge_retries_used=99)
-    for rule in (opt_out_stop, contact_window, class_retry_budget, template_allowlist):
-        assert rule(stop, ctx).allowed is True
+    ctx = context(
+        now=at_ist(3),
+        opted_out=True,
+        charge_retries_used=99,
+        contacts_sent=99,
+        last_contact_at=at_ist(3),
+        promise_to_pay_until=at_ist(3) + timedelta(days=30),
+    )
+    for rule in (
+        opt_out_stop,
+        promise_to_pay_suppression,
+        class_retry_budget,
+        template_allowlist,
+        contact_window,
+        contact_rate_limit,
+    ):
+        assert rule(stop, ctx).allowed is True, f"{rule.__name__} blocked a stop"
+
+
+def test_escalating_to_a_human_is_also_permitted_by_every_rule():
+    escalate = charge(at_ist(3)).model_copy(update={"type": ActionType.ESCALATE_MANUAL_REVIEW})
+    ctx = context(
+        now=at_ist(3),
+        opted_out=True,
+        charge_retries_used=99,
+        contacts_sent=99,
+        last_contact_at=at_ist(3),
+        promise_to_pay_until=at_ist(3) + timedelta(days=30),
+    )
+    for rule in (
+        opt_out_stop,
+        promise_to_pay_suppression,
+        class_retry_budget,
+        template_allowlist,
+        contact_window,
+        contact_rate_limit,
+    ):
+        assert rule(escalate, ctx).allowed is True, f"{rule.__name__} blocked an escalation"
+
+
+def test_a_risk_block_is_not_undone_by_the_customer_adding_a_new_card():
+    # The zero charge budget on a risk decline is a decision about the
+    # transaction, not about the instrument. A new card does not answer it.
+    ctx = context(
+        failure_class=FailureClass.RISK_DECLINE,
+        instrument_updated=True,
+        post_update_charges_used=0,
+    )
+    assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
+
+
+def test_a_revoked_mandate_is_not_undone_by_the_customer_adding_a_new_card():
+    ctx = context(
+        failure_class=FailureClass.MANDATE_REVOKED,
+        instrument_updated=True,
+        post_update_charges_used=0,
+    )
+    assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
+
+
+def test_a_naive_timestamp_is_refused_rather_than_assumed_to_be_local():
+    from datetime import datetime as _dt
+
+    import pytest as _pytest
+
+    with _pytest.raises(Exception):
+        context(now=_dt(2026, 8, 25, 10, 0))

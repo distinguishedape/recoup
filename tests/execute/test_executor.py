@@ -14,9 +14,10 @@ from recoup.execute.executor import (
     render_context_for,
 )
 from recoup.execute.rail import SimSubject, SimulatedRail, canonical_decline
-from recoup.models.core import Action, PolicyVerdict, Subscription
+from recoup.models.core import Action, Subscription
 from recoup.models.enums import ActionType, Band, FailureClass, Tier
-from recoup.policy.authorized import mint
+from recoup.policy.engine import authorize
+from recoup.policy.rules import PolicyContext
 
 NOW = datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc)
 SUB = Subscription(subscription_id="sub_1", customer_id="cust_1", plan_amount_paise=99900)
@@ -38,7 +39,25 @@ def action(action_type: ActionType, template_id: str | None = None, channel: str
 
 
 def authorized(action_obj: Action):
-    return mint(action_obj, PolicyVerdict(allowed=True, rule="all_rules_passed", detail="ok"))
+    """Route the action through the real policy engine, as production does.
+
+    There is deliberately no shortcut for building an AuthorizedAction, so the
+    tests obtain one the same way the orchestrator does.
+    """
+    result, verdict = authorize(
+        action_obj,
+        PolicyContext(
+            now=NOW,
+            failure_class=FailureClass.UNCLASSIFIED,
+            contacts_sent=0,
+            charge_retries_used=0,
+            opted_out=False,
+            promise_to_pay_until=None,
+            last_contact_at=None,
+        ),
+    )
+    assert result is not None, f"fixture action was denied by {verdict.rule}: {verdict.detail}"
+    return result
 
 
 @pytest.fixture()

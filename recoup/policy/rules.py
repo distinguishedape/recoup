@@ -22,7 +22,7 @@ Three design points worth stating because a judge will ask:
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from recoup.execute.messages import ALLOWED_TEMPLATE_IDS
 from recoup.models.core import Action, PolicyVerdict
@@ -37,6 +37,14 @@ MAX_POST_UPDATE_CHARGES = 1
 
 TERMINAL_ACTION_TYPES = frozenset({ActionType.STOP, ActionType.ESCALATE_MANUAL_REVIEW})
 
+INSTRUMENT_UPDATE_EXEMPT_CLASSES = frozenset({FailureClass.INSTRUMENT_INVALID})
+"""Only a dead instrument earns the post-update charge exemption.
+
+``RISK_DECLINE`` and ``MANDATE_REVOKED`` also carry a zero charge budget, but
+for reasons a new card does not answer: a risk block is a decision about the
+transaction, and a revoked mandate is a withdrawal of consent. Neither becomes
+chargeable because the customer happened to add a payment method."""
+
 
 class PolicyContext(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -50,6 +58,17 @@ class PolicyContext(BaseModel):
     last_contact_at: datetime | None
     instrument_updated: bool = False
     post_update_charges_used: int = 0
+
+    @field_validator("now", "promise_to_pay_until", "last_contact_at")
+    @classmethod
+    def _must_be_timezone_aware(cls, value: datetime | None) -> datetime | None:
+        # A naive datetime would make .astimezone(IST) assume whatever timezone
+        # the machine happens to be in, silently shifting the contact window.
+        # That is a compliance rule changing meaning with deployment location,
+        # so it is refused rather than quietly coerced.
+        if value is not None and value.tzinfo is None:
+            raise ValueError("PolicyContext datetimes must be timezone-aware")
+        return value
 
 
 RuleFn = Callable[[Action, PolicyContext], PolicyVerdict]
@@ -140,7 +159,10 @@ def class_retry_budget(action: Action, context: PolicyContext) -> PolicyVerdict:
         return _allow(rule, "terminal actions are not budgeted")
     budget = budget_for(context.failure_class)
     if action.type is ActionType.RETRY_CHARGE:
-        if context.instrument_updated:
+        if (
+            context.instrument_updated
+            and context.failure_class in INSTRUMENT_UPDATE_EXEMPT_CLASSES
+        ):
             # A new instrument is not a retry of the old one. Allow a bounded
             # number of charges on it regardless of the class budget, which
             # exists to stop us hammering the instrument that already failed.
