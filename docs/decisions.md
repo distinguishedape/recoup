@@ -575,3 +575,80 @@ explicitly, which costs seconds and keeps history readable.
 **The test suite took three minutes** because the audit log fsynced once per record and a
 cohort writes thousands. Write-ahead logging with a relaxed sync brought it to seconds
 without giving up the append-per-decision guarantee.
+
+
+---
+
+## Phase 8 — The real Razorpay slice
+
+### D25. The audit log would have crashed on every live webhook
+
+**Problem.** The webhook receiver's tests failed with
+`sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same
+thread`.
+
+This was not a test artifact. Any ASGI server hands each request to a worker thread, and the
+audit log's connection was pinned to the thread that opened it. **The live receiver would have
+raised on the audit write for every single webhook it ever received.** The bug had been sitting
+in the audit log since Task 4 and nothing caught it, because until now every caller was
+single-threaded.
+
+**Decision.** Open the connection with `check_same_thread=False` and serialise writes behind a
+`threading.Lock`. That is what SQLite wants anyway — many readers, one writer — and it composes
+correctly with the WAL mode added for speed.
+
+**Why it is worth recording.** The test suite only found it because FastAPI's `TestClient`
+reproduces the real threading model rather than calling the handler directly. A test that
+called the endpoint function in-process would have passed and shipped the bug.
+
+### D26. Refusing to fake what the API cannot do
+
+`RazorpayTestRail.charge` **raises** rather than returning a `ChargeResult`.
+
+It would have been trivial to return something plausible and let the numbers flow. That is
+precisely why it does not: the moment simulated outcomes can enter through the code path
+labelled *real*, every figure in the report becomes unfalsifiable. The simulated rail is where
+recovery outcomes come from, it says so in its own docstring, and this class makes the two
+impossible to blur. There is a test asserting the refusal.
+
+What the real rail *does* do is genuine: read subscription state, and build the hosted
+card-change link (`subscription_card_change=1`) that the instrument-update intervention
+depends on.
+
+### D27. Status codes chosen for Razorpay's retry behaviour, not REST tidiness
+
+Razorpay retries any non-2xx response. So an event type we deliberately do not handle returns
+**200** with `status: ignored` — a 404 or 422 would produce an endless retry loop for an event
+that will never be processable. Only a malformed or unauthenticated request gets a 400,
+because those *should* stop. Replays return `status: duplicate`; the receiver is idempotent on
+payment id.
+
+### D28. I ignored my own recorded lesson
+
+D12 records that Bash heredocs cannot reliably carry prose containing quotes and backticks,
+and that the file-writing tool should be used instead. I then wrote the webhook mapper and its
+tests as a heredoc, and it failed with `unexpected EOF while looking for matching quote`,
+losing both files.
+
+Recorded because the failure mode is *having the lesson and not applying it*, which is more
+instructive than the original mistake. Prose-heavy files now go through the file tool
+regardless of how convenient a heredoc looks.
+
+---
+
+## Final state
+
+- **397 tests passing.** Three plans complete: core pipeline, experiment harness, real
+  ingestion.
+- **Headline result:** Recoup recovers roughly the same money as blind retrying, using
+  materially fewer attempts, and avoiding ~126 charge attempts that could never have
+  succeeded. The money lift does **not** survive the sensitivity sweep and is reported as not
+  surviving.
+- **Six defects were found by running the thing rather than by reading it**: two forgeable
+  authorisation routes (D19), an ungated budget exemption (D20), a completely dead flagship
+  intervention (D21), an unpaired treatment arm (D22), and a thread-unsafe audit log that
+  would have broken every live webhook (D25).
+
+The last one is the argument for the whole approach. A demo would have shown a working
+pipeline, a full audit trail, and a plausible number — and three of those six defects would
+have shipped inside it.
