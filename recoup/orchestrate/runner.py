@@ -39,7 +39,7 @@ from recoup.models.enums import ActionType, Band, FailureClass, TerminalState, T
 from recoup.plan.budgets import CONTACT_ACTION_TYPES
 from recoup.plan.llm_planner import plan as build_intervention_plan
 from recoup.policy.engine import authorize
-from recoup.policy.rules import PolicyContext
+from recoup.policy.rules import MAX_RESCHEDULES, PolicyContext, next_permitted_contact_time
 
 POST_UPDATE_CHARGE_DELAY_HOURS = 1
 """Once a customer updates their instrument, charge shortly afterwards --
@@ -67,6 +67,10 @@ class SubjectOutcome(BaseModel):
     gross_recovered_paise: int
     cost_paise: int
     actions_executed: int
+    charge_attempts: int = 0
+    """Charge attempts only. The spec's efficiency metrics are defined on
+    charges, and counting messages alongside them made a metric named "charge
+    attempts" move whenever messaging behaviour changed."""
     actions_blocked: int
     first_failure_at: datetime | None = None
     recovered_at: datetime | None = None
@@ -123,6 +127,7 @@ def run_recoup_arm(
     executed_count: dict[str, int] = defaultdict(int)
     blocked_count: dict[str, int] = defaultdict(int)
     spend: dict[str, int] = defaultdict(int)
+    charges: dict[str, int] = defaultdict(int)
     first_failure_at: dict[str, datetime] = {}
     recovered_at: dict[str, datetime] = {}
 
@@ -224,6 +229,35 @@ def run_recoup_arm(
             charged_instrument_ids=frozenset(state.charged_instrument_ids),
         )
         authorized, verdict = authorize(action, context)
+
+        if authorized is None and verdict.rule == "contact_window":
+            # A timing rule is answered by a different time. Discarding the
+            # action would turn "not at 3am" into "not at all", which is a
+            # different policy and an expensive one: this rule alone blocked
+            # 872 contacts in a 2,000-subject run, and every one was lost.
+            moved_already = state.reschedules.get(action.action_id, 0)
+            if moved_already < MAX_RESCHEDULES:
+                state.reschedules[action.action_id] = moved_already + 1
+                when = next_permitted_contact_time(now)
+                audit.append(
+                    new_record(
+                        sub_id,
+                        now,
+                        "contact_rescheduled",
+                        {
+                            "action_id": action.action_id,
+                            "action_type": action.type.value,
+                            "rule": verdict.rule,
+                            "detail": verdict.detail,
+                            "original_time": now.isoformat(),
+                            "rescheduled_to": when.isoformat(),
+                            "attempt": moved_already + 1,
+                        },
+                    )
+                )
+                clock.schedule(when, action.model_copy(update={"scheduled_at": when}))
+                continue
+
         if authorized is None:
             blocked_count[sub_id] += 1
             audit.append(
@@ -243,6 +277,8 @@ def run_recoup_arm(
 
         result = executor.execute(authorized, render_context_for(subscriptions[sub_id]))
         executed_count[sub_id] += 1
+        if action.type is ActionType.RETRY_CHARGE:
+            charges[sub_id] += 1
         spend[sub_id] += result.cost_paise
         if context.replacement_instrument_id and action.type is ActionType.RETRY_CHARGE:
             state.charged_instrument_ids.add(context.replacement_instrument_id)
@@ -295,6 +331,7 @@ def run_recoup_arm(
                 gross_recovered_paise=gross,
                 cost_paise=spend[sub_id],
                 actions_executed=executed_count[sub_id],
+                charge_attempts=charges[sub_id],
                 actions_blocked=blocked_count[sub_id],
                 first_failure_at=first_failure_at.get(sub_id),
                 recovered_at=recovered_at.get(sub_id),

@@ -55,6 +55,9 @@ class LadderState(BaseModel):
     contacts_sent: int = 0
     charge_retries_used: int = 0
     charged_instrument_ids: set[str] = Field(default_factory=set)
+    reschedules: dict[str, int] = Field(default_factory=dict)
+    """How many times each action has been moved for falling outside the
+    contact window. Bounded, so an action cannot orbit the clock."""
     recovered: bool = False
     opted_out: bool = False
     escalated_manual_review: bool = False

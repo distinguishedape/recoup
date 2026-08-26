@@ -121,6 +121,7 @@ def run_control_arm(config: RunConfig, audit: AuditLog) -> RunResult:
                 gross_recovered_paise=gross,
                 cost_paise=spend[sub_id],
                 actions_executed=attempts[sub_id],
+                charge_attempts=attempts[sub_id],
                 actions_blocked=0,
                 first_failure_at=cohort.subjects[sub_id].first_failure_at,
                 recovered_at=recovered_at.get(sub_id),

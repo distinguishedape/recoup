@@ -23,6 +23,7 @@ def arm(name, recovered, total, gross, cost, executed):
             gross_recovered_paise=gross if i < recovered else 0,
             cost_paise=cost,
             actions_executed=executed,
+            charge_attempts=executed,
             actions_blocked=0,
             first_failure_at=START,
             recovered_at=START if i < recovered else None,

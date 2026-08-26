@@ -11,7 +11,10 @@ Two definitions carry weight and are stated in the report:
   their mandate did not fail to be recovered; they left. Leaving them in
   the denominator rewards whichever arm gives up on them fastest.
 * **A wasted attempt is a charge spent on a cause a retry cannot fix,
-  on a subject that never recovered.** The second half matters: a charge
+  on a subject that never recovered.** Charges, specifically. An earlier
+  version summed every executed action, so a metric named "charge attempts"
+  moved whenever messaging behaviour changed -- which made rescheduling blocked
+  contacts look like a regression when it was recovering money. The second half matters: a charge
   after a successful instrument update is not a retry of the dead card,
   and counting it as waste would penalise the intervention that worked.
 """
@@ -88,10 +91,10 @@ def compute_metrics(result: RunResult, arm: str) -> ArmMetrics:
     recovered = counts[TerminalState.RECOVERED]
     voluntary = counts[TerminalState.VOLUNTARY_CHURN]
     denominator = len(outcomes) - voluntary
-    charge_attempts = sum(o.actions_executed for o in outcomes)
+    charge_attempts = sum(o.charge_attempts for o in outcomes)
 
     wasted = sum(
-        o.actions_executed
+        o.charge_attempts
         for o in outcomes
         if o.failure_class in ZERO_RETRY_CLASSES and o.terminal is not TerminalState.RECOVERED
     )

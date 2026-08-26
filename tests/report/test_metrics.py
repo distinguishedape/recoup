@@ -8,7 +8,10 @@ START = datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc)
 
 
 def outcome(sub_id, terminal, failure_class=FailureClass.INSUFFICIENT_FUNDS,
-            gross=0, cost=0, executed=0, hours=None) -> SubjectOutcome:
+            gross=0, cost=0, executed=0, hours=None, charges=None) -> SubjectOutcome:
+    # `executed` counts every action; `charges` counts only charge attempts,
+    # which is what the spec's efficiency metrics are defined on. Defaulting
+    # charges to executed keeps the charge-only fixtures readable.
     return SubjectOutcome(
         subscription_id=sub_id,
         failure_class=failure_class,
@@ -16,6 +19,7 @@ def outcome(sub_id, terminal, failure_class=FailureClass.INSUFFICIENT_FUNDS,
         gross_recovered_paise=gross,
         cost_paise=cost,
         actions_executed=executed,
+        charge_attempts=executed if charges is None else charges,
         actions_blocked=0,
         first_failure_at=START,
         recovered_at=START + timedelta(hours=hours) if hours is not None else None,
@@ -156,3 +160,24 @@ def test_wasted_attempt_reduction_is_zero_when_the_control_wasted_nothing():
     control = compute_metrics(result(outcome("a", TerminalState.UNRECOVERED, executed=1)), "c")
     treatment = compute_metrics(result(outcome("a", TerminalState.UNRECOVERED, executed=1)), "t")
     assert compare(control, treatment).wasted_attempt_reduction == 0.0
+
+
+def test_efficiency_metrics_count_charges_and_ignore_messages():
+    # The spec defines both on charge attempts. Summing every action made a
+    # metric named "charge attempts" move whenever messaging changed, which
+    # made rescheduling blocked contacts look like a regression when it was
+    # recovering money.
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, gross=99900, executed=6, charges=2, hours=24),
+    ), "treatment")
+    assert m.charge_attempts == 2
+    assert m.attempts_per_recovery == 2.0
+
+
+def test_a_wasted_attempt_is_a_charge_not_a_message():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.UNRECOVERED, FailureClass.INSTRUMENT_INVALID,
+                executed=5, charges=0),
+    ), "treatment")
+    # Asking a customer for a new card is the remedy for this cause, not waste.
+    assert m.wasted_attempts == 0

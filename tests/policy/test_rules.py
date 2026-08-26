@@ -273,3 +273,45 @@ def test_a_naive_timestamp_is_refused_rather_than_assumed_to_be_local():
 
     with _pytest.raises(Exception):
         context(now=_dt(2026, 8, 25, 10, 0))
+
+
+def test_a_time_inside_the_window_is_returned_unchanged():
+    from recoup.policy.rules import next_permitted_contact_time
+
+    assert next_permitted_contact_time(at_ist(10)) == at_ist(10)
+
+
+def test_a_late_evening_contact_moves_to_the_next_morning():
+    from recoup.policy.rules import next_permitted_contact_time
+
+    assert next_permitted_contact_time(at_ist(21, 30)) == at_ist(8, 0) + timedelta(days=1)
+
+
+def test_an_early_morning_contact_moves_to_opening_time_the_same_day():
+    from recoup.policy.rules import next_permitted_contact_time
+
+    assert next_permitted_contact_time(at_ist(3)) == at_ist(8, 0)
+
+
+def test_the_window_boundaries_reschedule_correctly():
+    from recoup.policy.rules import next_permitted_contact_time
+
+    assert next_permitted_contact_time(at_ist(8, 0)) == at_ist(8, 0)
+    assert next_permitted_contact_time(at_ist(18, 59)) == at_ist(18, 59)
+    assert next_permitted_contact_time(at_ist(19, 0)) == at_ist(8, 0) + timedelta(days=1)
+
+
+def test_a_rescheduled_time_always_passes_the_rule_that_rejected_it():
+    # The property that matters: rescheduling must actually resolve the denial,
+    # or the action orbits the clock being refused forever.
+    from recoup.policy.rules import next_permitted_contact_time
+
+    for hour in range(24):
+        moved = next_permitted_contact_time(at_ist(hour))
+        assert contact_window(message(moved), context(now=moved)).allowed
+
+
+def test_rescheduling_is_bounded_by_a_declared_cap():
+    from recoup.policy.rules import MAX_RESCHEDULES
+
+    assert 1 <= MAX_RESCHEDULES <= 5

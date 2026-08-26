@@ -285,3 +285,60 @@ def test_a_blocked_notification_does_not_also_kill_the_retries_behind_it(audit):
 
     executed = [r for r in audit.all() if r.stage == "execute"]
     assert executed, "every retry was blocked because it sat above the starting tier"
+
+
+def test_a_contact_blocked_by_the_window_is_rescheduled_not_discarded(audit):
+    # The rule exists to stop us messaging someone at 3am, not to cancel the
+    # message. Discarding turns a rule about when into a rule about whether.
+    run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    moved = [r for r in audit.all() if r.stage == "contact_rescheduled"]
+    assert moved, "every window-blocked contact was thrown away"
+    for record in moved:
+        assert record.payload["rule"] == "contact_window"
+        assert record.payload["rescheduled_to"] > record.payload["original_time"]
+
+
+def test_a_rescheduled_contact_gets_a_real_second_chance(audit):
+    run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    subjects = {r.subscription_id for r in audit.all() if r.stage == "contact_rescheduled"}
+    assert subjects
+    executed_after_move = 0
+    for sub_id in subjects:
+        story = audit.reconstruct(sub_id)
+        first_move = next(i for i, s in enumerate(story) if s.stage == "contact_rescheduled")
+        if any(s.stage == "execute" for s in story[first_move:]):
+            executed_after_move += 1
+    assert executed_after_move > 0, "no rescheduled contact ever ran"
+
+
+def test_rescheduling_is_bounded(audit):
+    from collections import Counter
+
+    from recoup.policy.rules import MAX_RESCHEDULES
+
+    run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    per_action = Counter(
+        r.payload["action_id"] for r in audit.all() if r.stage == "contact_rescheduled"
+    )
+    assert per_action
+    assert all(n <= MAX_RESCHEDULES for n in per_action.values())
+
+
+def test_only_a_timing_denial_earns_a_reschedule(audit):
+    # A budget denial, an opt-out or a revoked mandate all mean the action
+    # should not happen at all. Only a rule about the hour is answered by a
+    # different hour.
+    opted = frozenset(f"sub_{i:04d}" for i in range(10))
+    run_recoup_arm(config(cohort_size=200, seed=3, opted_out_ids=opted), audit)
+    for sub_id in opted:
+        assert not [
+            r for r in audit.reconstruct(sub_id) if r.stage == "contact_rescheduled"
+        ]
+
+
+def test_a_rescheduled_contact_still_passes_every_other_rule(audit):
+    # A reschedule is a fresh attempt, not a bypass. Anything it runs into on
+    # the second pass still applies.
+    run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    executed = [r for r in audit.all() if r.stage == "execute"]
+    assert all(r.payload["verdict_rule"] == "all_rules_passed" for r in executed)
