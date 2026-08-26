@@ -1,0 +1,26 @@
+{
+  "entity": "event",
+  "account_id": "acc_TESTACCOUNT",
+  "event": "payment.failed",
+  "contains": ["payment"],
+  "payload": {
+    "payment": {
+      "entity": {
+        "id": "pay_FAILED0001",
+        "entity": "payment",
+        "amount": 99900,
+        "currency": "INR",
+        "status": "failed",
+        "order_id": "order_TEST0001",
+        "method": "card",
+        "captured": false,
+        "error_code": "BAD_REQUEST_ERROR",
+        "error_description": "Your card has expired. Try another card or contact your bank.",
+        "error_source": "issuer",
+        "error_step": "payment_authentication",
+        "error_reason": "card_expired"
+      }
+    }
+  },
+  "created_at": 1756110000
+}

@@ -22,11 +22,12 @@ from fastapi import FastAPI, Request, Response
 
 from recoup.audit.log import AuditLog, new_record
 from recoup.ingest.signature import SIGNATURE_HEADER, verify_signature
-from recoup.ingest.webhook_mapper import map_subscription_pending
+from recoup.ingest.webhook_mapper import MAPPERS
 from recoup.models.core import FailureEvent
 from recoup.razorpay.config import RazorpayConfig, load_config
 
 SUBSCRIPTION_PENDING_EVENT = "subscription.pending"
+PAYMENT_FAILED_EVENT = "payment.failed"
 WEBHOOK_PATH = "/webhooks/razorpay"
 
 EventSink = Callable[[FailureEvent], None]
@@ -84,11 +85,12 @@ def create_app(
             return _json_response({"status": "rejected", "reason": "malformed body"}, 400)
 
         event_type = str(payload.get("event", ""))
-        if event_type != SUBSCRIPTION_PENDING_EVENT:
+        mapper = MAPPERS.get(event_type)
+        if mapper is None:
             return _json_response({"status": "ignored", "event": event_type})
 
         received_at = datetime.now(timezone.utc)
-        event = map_subscription_pending(payload, received_at)
+        event = mapper(payload, received_at)
 
         if event.event_id in seen_event_ids:
             return _json_response(
@@ -105,7 +107,13 @@ def create_app(
         if sink is not None:
             sink(event)
 
-        return _json_response({"status": "accepted", "subscription_id": event.subscription_id})
+        return _json_response(
+            {
+                "status": "accepted",
+                "event": event_type,
+                "subscription_id": event.subscription_id,
+            }
+        )
 
     return app
 
