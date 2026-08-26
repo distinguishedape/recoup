@@ -118,12 +118,19 @@ Razorpay rail reads subscription state and builds hosted card-change links; its
 `charge` method **raises** rather than returning a plausible result, so
 simulated outcomes can never enter through the path labelled real.
 
-Ingestion is real, and has been run for real. A genuine payment declined by
-Razorpay was replayed through the receiver: signature verified against the exact
-bytes, mapped, classified by the model, planned and audited. See
+Ingestion is built against the live API and exercised on genuine Razorpay data,
+with one gap stated plainly: **Razorpay has never delivered a webhook to the
+receiver.** A real payment was declined on a real test-mode account, read back
+from the API, assembled into a webhook body, signed locally and posted to the
+receiver — which mapped, classified, planned and audited it correctly.
+
+That leaves exactly one thing unproven: the signature was produced by the same
+code that verified it, so the scheme's interoperability with Razorpay's own
+signing is untested. Closing it needs the receiver on a public URL and
+registered in the dashboard. See
 [`evidence/live-razorpay-run.md`](evidence/live-razorpay-run.md).
 
-Live webhooks and the synthetic cohort emit an identical `FailureEvent`, and
+Webhook events and the synthetic cohort emit an identical `FailureEvent`, and
 nothing downstream may branch on which produced it.
 
 ## Compliance

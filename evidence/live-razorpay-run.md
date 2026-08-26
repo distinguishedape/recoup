@@ -1,7 +1,25 @@
 # A real Razorpay decline through the whole pipeline
 
-Not a fixture. A genuine payment on a genuine order, declined by Razorpay in
-test mode, replayed through the receiver exactly as Razorpay delivers it.
+## What is real here, and what is not
+
+**Real:** the order, the payment, the decline, and the error data below. All of
+it came from a live Razorpay test-mode account, produced by a human paying a
+checkout page with a card that fails.
+
+**Not real:** the delivery. Razorpay never sent this to the receiver over HTTP.
+The payment was read back from Razorpay's API, the webhook body was assembled
+around it, and it was signed locally with the account's webhook secret before
+being posted to the receiver.
+
+**What that leaves untested.** The signature was produced by the same HMAC code
+that verified it. Self-consistent code passes its own check whether or not it
+agrees with Razorpay, so interoperability of the signature scheme is the one
+thing this run cannot demonstrate. Everything downstream of the signature --
+mapping, classification, planning, audit -- is exercised on genuine Razorpay
+error data.
+
+Closing the gap needs the receiver exposed on a public URL and registered in
+the dashboard, which is a step nobody has performed yet.
 
 | | |
 |---|---|
