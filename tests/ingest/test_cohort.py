@@ -49,14 +49,64 @@ def test_a_large_cohort_contains_every_failure_class():
     assert seen == set(FailureClass)
 
 
-def test_the_reason_string_on_the_event_reflects_the_latent_class():
-    cohort = generate_cohort(CohortSpec(size=200, seed=5), START)
+def test_an_unambiguous_reason_string_still_identifies_its_cause():
+    # Every string except the deliberately ambiguous ones must map back to the
+    # cause that produced it, or the cohort is generating nonsense.
+    from recoup.execute.rail import AMBIGUOUS_STRINGS
+
+    cohort = generate_cohort(CohortSpec(size=400, seed=5), START)
     for event in cohort.events:
+        if event.error_reason in AMBIGUOUS_STRINGS:
+            continue
+        classified = classify_by_table(event)
+        assert classified is not None
         subject = cohort.subjects[event.subscription_id]
         if subject.latent_class is not FailureClass.UNCLASSIFIED:
-            classified = classify_by_table(event)
-            assert classified is not None
             assert classified.failure_class is subject.latent_class
+
+
+def test_a_cause_produces_more_than_one_reason_string():
+    # The point of the change. One canonical string per cause made accuracy
+    # perfect by construction and measured nothing.
+    from collections import defaultdict
+
+    cohort = generate_cohort(CohortSpec(size=1000, seed=5), START)
+    by_class = defaultdict(set)
+    for event in cohort.events:
+        by_class[cohort.subjects[event.subscription_id].latent_class].add(event.error_reason)
+    varied = [c for c, reasons in by_class.items() if len(reasons) > 1]
+    assert len(varied) >= 4
+
+
+def test_the_cohort_produces_genuinely_ambiguous_declines():
+    # Every real decline observed against a live Razorpay account was
+    # ambiguous. A cohort that never generates them cannot test the path built
+    # for them.
+    from recoup.execute.rail import AMBIGUOUS_STRINGS
+
+    cohort = generate_cohort(CohortSpec(size=1000, seed=5), START)
+    ambiguous = [e for e in cohort.events if e.error_reason in AMBIGUOUS_STRINGS]
+    assert len(ambiguous) > 50
+    assert all(classify_by_table(e) is None for e in ambiguous)
+
+
+def test_the_table_alone_can_no_longer_be_perfect():
+    # If this ever returns to 100% the cohort has stopped testing anything.
+    cohort = generate_cohort(CohortSpec(size=1000, seed=5), START)
+    correct = sum(
+        classify_by_table(e) is not None
+        and classify_by_table(e).failure_class
+        is cohort.subjects[e.subscription_id].latent_class
+        for e in cohort.events
+    )
+    accuracy = correct / len(cohort.events)
+    assert 0.6 < accuracy < 1.0
+
+
+def test_source_and_step_are_a_second_signal_not_a_constant():
+    cohort = generate_cohort(CohortSpec(size=500, seed=5), START)
+    assert len({e.error_source for e in cohort.events}) > 2
+    assert len({e.error_step for e in cohort.events}) > 1
 
 
 def test_plan_amounts_are_drawn_from_the_declared_distribution():

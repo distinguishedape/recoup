@@ -29,11 +29,32 @@ likely to clear on its own.
 - {FailureClass.RISK_DECLINE.value}: the payment was blocked by a risk or fraud check.
 - {FailureClass.UNCLASSIFIED.value}: the evidence does not support any of the above.
 
+The reason string you are given is one Razorpay explicitly documents as *not* disclosing \
+the underlying cause. That is why it reached you. It does not mean no evidence exists.
+
+**`source` and `step` are the evidence.** They say which party in the chain refused and at \
+which stage, and that narrows the cause considerably. Read them first:
+
+- `source: bank` at `payment_authorization` -- the customer's own bank refused to move the \
+money. Overwhelmingly this is {FailureClass.INSUFFICIENT_FUNDS.value}.
+- `source: issuer` -- the card issuer refused the instrument itself. Usually \
+{FailureClass.INSTRUMENT_INVALID.value}: expired, blocked, or not permitted online.
+- `source: gateway` at `payment_authorization` -- the failure never reached the bank. \
+Usually {FailureClass.TRANSIENT_ISSUER.value}, or {FailureClass.RISK_DECLINE.value} if a \
+risk or compliance check is implicated.
+- `source: business` -- the merchant side stopped it, which points at \
+{FailureClass.MANDATE_REVOKED.value}.
+- `step: payment_authentication` -- failed at 3D-Secure or OTP rather than at the money, \
+which points at the instrument or at {FailureClass.UNCLASSIFIED.value}.
+
 Rules:
-- Prefer {FailureClass.UNCLASSIFIED.value} over a guess you cannot justify from the evidence.
-- Use `source` and `step` as evidence: a bank-sourced decline at authorisation points \
-toward funds or issuer problems; a gateway-sourced decline points toward risk or technical \
-causes.
+- Name the most likely cause the evidence supports, and set `confidence` to reflect how \
+strongly it supports it. A well-calibrated 0.6 is far more useful than a reflexive \
+{FailureClass.UNCLASSIFIED.value}, because that bucket is treated as "cause unknown" and \
+gets a generic retry ladder rather than the intervention the cause actually needs.
+- Reserve {FailureClass.UNCLASSIFIED.value} for when `source` and `step` genuinely fail to \
+discriminate -- not merely because the reason string alone was uninformative. It always is; \
+that is why it was sent to you.
 - Reply with JSON only, no commentary, in exactly this shape:
 {{"failure_class": "<one of the classes above>", "confidence": <number between 0 and 1>, \
 "rationale": "<one sentence>"}}

@@ -43,6 +43,115 @@ def canonical_decline(failure_class: FailureClass) -> tuple[str, str, str]:
     return _DECLINES[failure_class]
 
 
+#: The full vocabulary a cause can decline with, drawn from Razorpay's published
+#: reason list, with the share of that cause each string accounts for.
+#:
+#: A cohort that emits one canonical string per cause cannot test a classifier.
+#: Every subject maps unambiguously, accuracy is perfect by construction, and
+#: the ambiguous strings -- which were *every* real decline observed against a
+#: live account -- never appear at all. These weights make the reason string a
+#: property of the subject rather than of its label, so classification becomes
+#: something the experiment measures instead of something it assumes.
+REASON_MIX: dict[FailureClass, dict[str, float]] = {
+    FailureClass.INSUFFICIENT_FUNDS: {
+        "insufficient_funds": 0.70,
+        "payment_failed": 0.20,  # ambiguous: only the model can place it
+        "card_declined": 0.07,  # ambiguous
+        "funds_blocked_by_mandate": 0.03,
+    },
+    FailureClass.INSTRUMENT_INVALID: {
+        "card_expired": 0.42,
+        "debit_instrument_blocked": 0.16,
+        "card_disabled_for_online_payments": 0.14,
+        "debit_instrument_inactive": 0.10,
+        "card_not_enrolled": 0.06,
+        "card_declined": 0.09,  # ambiguous
+        "payment_failed": 0.03,  # ambiguous
+    },
+    FailureClass.TRANSIENT_ISSUER: {
+        "bank_technical_error": 0.34,
+        "gateway_technical_error": 0.24,
+        "issuer_technical_error": 0.16,
+        "bank_not_available": 0.10,
+        "payment_declined_due_to_high_traffic": 0.05,
+        "bank_cutoff_in_progress": 0.03,
+        "payment_failed": 0.08,  # ambiguous
+    },
+    FailureClass.RISK_DECLINE: {
+        "payment_risk_check_failed": 0.72,
+        "compliance_violation": 0.16,
+        "card_declined": 0.12,  # ambiguous
+    },
+    FailureClass.MANDATE_REVOKED: {
+        # Synthesised from subscription state rather than sent as an error, so
+        # this one genuinely has no variety.
+        "subscription_cancelled": 1.0,
+    },
+    FailureClass.UNCLASSIFIED: {
+        "authentication_failed": 0.30,
+        "payment_timed_out": 0.20,
+        "incorrect_cvv": 0.15,
+        "transaction_limit_exceeded": 0.12,
+        "payment_cancelled": 0.10,
+        "otp_attempts_exceeded": 0.08,
+        "some_reason_razorpay_added_last_tuesday": 0.05,  # never seen before
+    },
+}
+
+#: Where each reason string is reported from. Razorpay's ``source`` and ``step``
+#: are a second, independent signal, and the resolver prompt leans on them.
+_SOURCE_STEP: dict[str, tuple[str, str]] = {
+    "insufficient_funds": ("bank", "payment_authorization"),
+    "funds_blocked_by_mandate": ("bank", "payment_authorization"),
+    "card_expired": ("issuer", "payment_authentication"),
+    "card_not_enrolled": ("issuer", "payment_authentication"),
+    "card_disabled_for_online_payments": ("issuer", "payment_authorization"),
+    "debit_instrument_inactive": ("issuer", "payment_authorization"),
+    "debit_instrument_blocked": ("issuer", "payment_authorization"),
+    "subscription_cancelled": ("business", "payment_initiation"),
+    "bank_technical_error": ("bank", "payment_authorization"),
+    "issuer_technical_error": ("issuer", "payment_authorization"),
+    "bank_not_available": ("bank", "payment_authorization"),
+    "bank_cutoff_in_progress": ("bank", "payment_authorization"),
+    "gateway_technical_error": ("gateway", "payment_authorization"),
+    "payment_declined_due_to_high_traffic": ("gateway", "payment_authorization"),
+    "payment_risk_check_failed": ("gateway", "payment_authorization"),
+    "compliance_violation": ("gateway", "payment_authorization"),
+    "authentication_failed": ("issuer", "payment_authentication"),
+    "incorrect_cvv": ("issuer", "payment_authentication"),
+    "otp_attempts_exceeded": ("issuer", "payment_authentication"),
+    "transaction_limit_exceeded": ("issuer", "payment_authorization"),
+    "payment_timed_out": ("gateway", "payment_authorization"),
+    "payment_cancelled": ("customer", "payment_authentication"),
+}
+
+_AMBIGUOUS_SOURCE_STEP: dict[FailureClass, tuple[str, str]] = {
+    # The ambiguous strings carry no cause of their own, so source and step are
+    # the only evidence left. They point where the true cause would.
+    FailureClass.INSUFFICIENT_FUNDS: ("bank", "payment_authorization"),
+    FailureClass.INSTRUMENT_INVALID: ("issuer", "payment_authorization"),
+    FailureClass.TRANSIENT_ISSUER: ("gateway", "payment_authorization"),
+    FailureClass.RISK_DECLINE: ("gateway", "payment_authorization"),
+    FailureClass.MANDATE_REVOKED: ("business", "payment_initiation"),
+    FailureClass.UNCLASSIFIED: ("issuer", "payment_authorization"),
+}
+
+AMBIGUOUS_STRINGS = frozenset({"card_declined", "payment_failed", "payment_declined", "debit_declined"})
+
+
+def sample_decline(
+    failure_class: FailureClass, rng: random.Random
+) -> tuple[str, str, str]:
+    """Draw a (reason, source, step) triple this cause could really produce."""
+    mix = REASON_MIX[failure_class]
+    reason = rng.choices(list(mix), weights=list(mix.values()), k=1)[0]
+    if reason in AMBIGUOUS_STRINGS:
+        source, step = _AMBIGUOUS_SOURCE_STEP[failure_class]
+    else:
+        source, step = _SOURCE_STEP.get(reason, ("unknown", "unknown"))
+    return reason, source, step
+
+
 CHARGE_DRAWS = "charge"
 CONVERSION_DRAWS = "convert"
 

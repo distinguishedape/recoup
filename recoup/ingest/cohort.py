@@ -8,6 +8,14 @@ makes the real ingestion slice load-bearing rather than decorative.
 The class distribution and plan-amount distribution are declared here and
 reproduced in the generated report, because a cohort tuned to flatter the
 agent would invalidate every number that follows.
+
+Each subject draws its reason string from the full vocabulary its cause can
+really produce, rather than a single canonical one per cause. An earlier
+version emitted six strings, one per cause, each mapping unambiguously -- so
+classification accuracy was perfect by construction and measured nothing, and
+the genuinely ambiguous strings never appeared at all. Those turned out to be
+*every* real decline observed against a live Razorpay account, which made them
+the least defensible thing to leave out.
 """
 
 import random
@@ -15,7 +23,7 @@ from datetime import datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from recoup.execute.rail import SimSubject, canonical_decline
+from recoup.execute.rail import SimSubject, sample_decline
 from recoup.models.core import FailureEvent, Subscription
 from recoup.models.enums import FailureClass
 
@@ -70,7 +78,7 @@ def generate_cohort(spec: CohortSpec, start_at: datetime) -> Cohort:
         latent_class = rng.choices(classes, weights=weights, k=1)[0]
         amount = rng.choice(spec.plan_amounts_paise)
         occurred_at = start_at + timedelta(hours=rng.uniform(0, FAILURE_SPREAD_HOURS))
-        reason, source, step = canonical_decline(latent_class)
+        reason, source, step = sample_decline(latent_class, rng)
 
         subscriptions.append(
             Subscription(
