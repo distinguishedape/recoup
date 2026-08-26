@@ -71,8 +71,11 @@ def test_a_failed_call_is_not_cached(tmp_path):
     assert client.complete("sys", "user") == "second time lucky"
 
 
-def test_no_api_key_and_no_transport_means_unavailable_not_a_crash(tmp_path, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    client = LLMClient(tmp_path / "cache.json")
+def test_no_api_key_and_no_transport_means_unavailable_not_a_crash(tmp_path):
+    # An explicit empty environment rather than deleting one variable: the
+    # client now recognises several providers, so a test that unset only one of
+    # them passed or failed depending on what happened to be exported in the
+    # developer's shell.
+    client = LLMClient(tmp_path / "cache.json", env={})
     with pytest.raises(LLMUnavailable):
         client.complete("sys", "user")

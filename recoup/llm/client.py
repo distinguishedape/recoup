@@ -18,44 +18,46 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Callable
 
-DEFAULT_MODEL = "claude-sonnet-5"
-TEMPERATURE = 0.0
+from recoup.llm.providers import (
+    ANTHROPIC,
+    DEFAULT_MODELS,
+    KEY_ENV_VARS,
+    TEMPERATURE,
+    Transport,
+    build_transport,
+    detect_provider,
+    model_for,
+)
 
-Transport = Callable[[str, str, str, int], str]
+DEFAULT_MODEL = DEFAULT_MODELS[ANTHROPIC]
+"""Fallback when no provider can be detected. Which provider is actually used
+is decided by whichever key is present; see ``recoup.llm.providers``."""
 
 
 class LLMUnavailable(RuntimeError):
     """The model could not be reached, or answered with something unusable."""
 
 
-def _anthropic_transport(api_key: str) -> Transport:
-    def call(model: str, system: str, user: str, max_tokens: int) -> str:
-        import anthropic
-
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=TEMPERATURE,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        return "".join(block.text for block in response.content if block.type == "text")
-
-    return call
-
-
 class LLMClient:
     def __init__(
         self,
         cache_path: Path,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
         api_key: str | None = None,
         transport: Transport | None = None,
+        env: dict[str, str] | None = None,
     ) -> None:
-        self.model = model
+        environment = dict(os.environ if env is None else env)
+        if api_key:
+            # An explicitly supplied key belongs to whichever provider the
+            # environment names, or to Anthropic if it names none.
+            provider_hint = detect_provider(environment) or ANTHROPIC
+            environment.setdefault(KEY_ENV_VARS[provider_hint], api_key)
+        self.provider = detect_provider(environment) if transport is None else None
+        self.model = model or (
+            model_for(self.provider, environment) if self.provider else DEFAULT_MODEL
+        )
         self.calls = 0
         self._cache_path = Path(cache_path)
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,9 +66,10 @@ class LLMClient:
             self._cache = json.loads(self._cache_path.read_text(encoding="utf-8"))
         if transport is not None:
             self._transport: Transport | None = transport
+        elif self.provider is not None:
+            self._transport = build_transport(self.provider, environment)
         else:
-            key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-            self._transport = _anthropic_transport(key) if key else None
+            self._transport = None
 
     def cache_key(self, system: str, user: str, max_tokens: int) -> str:
         material = "\x00".join([self.model, system, user, str(max_tokens)])
@@ -83,7 +86,9 @@ class LLMClient:
             return self._cache[key]
         if self._transport is None:
             raise LLMUnavailable(
-                "no ANTHROPIC_API_KEY and no cached response for this prompt"
+                "no model provider is configured and no cached response for this "
+                "prompt. Set one of GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, "
+                "TOGETHER_API_KEY, XAI_API_KEY or ANTHROPIC_API_KEY."
             )
         try:
             text = self._transport(self.model, system, user, max_tokens)
