@@ -464,6 +464,114 @@ explicitly — an omitted model silently inherits the session's most expensive o
 Appended as tasks complete. Each entry records problems hit during implementation
 and how they were resolved.
 
-### Task 1 — Project scaffold and closed vocabularies
+Plan A (core pipeline, 15 tasks) and Plan C (experiment harness, 6 tasks) are complete:
+334 tests passing. Below are the problems that only appeared once code was running.
 
-Dispatched. Awaiting report.
+### D19. A code review destroyed the non-bypassability claim
+
+**Problem.** I dispatched a reviewer specifically to attack `AuthorizedAction`, asking it to
+try `dataclasses.replace`, `pickle`, `object.__new__`, subclassing, and reading the private
+token out of the module. It found two routes that defeated the design, and neither needed an
+exploit:
+
+1. **`mint()` was a public backdoor.** Its only check was that the verdict said yes. Anyone
+   who wrote their own `PolicyVerdict(allowed=True, ...)` — a public Pydantic model — got a
+   valid authorisation for any action, with no rule ever running. Two imports and a call.
+2. **`dataclasses.replace` forged one silently.** `token` was an ordinary field, so `replace()`
+   copied it across by identity and `__post_init__` accepted it. This is the worse of the two:
+   replacing one field of an immutable object is idiomatic Python, so an engineer bumping
+   `scheduled_at` for a backoff would have forged permission **by accident**.
+
+**Decision.** The constructor now always raises, which closes direct construction and
+`replace()` together. Construction moved inside `engine.authorize`, immediately after the
+rules have run, with no separately importable helper.
+
+**And the claim itself was narrowed.** The commit had said an unauthorised action "cannot be
+constructed". That was false. The module now states the standard it actually meets:
+`object.__new__`, a subclass, `pickle`, or reaching for the private constructor will all
+still work, because Python allows it. What is guaranteed is that *accidental* bypass is
+impossible and *deliberate* bypass cannot be written without a line that is unmistakable in
+review. Fixing the overclaim mattered as much as fixing the code.
+
+**Cost if wrong.** A determined caller inside the codebase can still bypass the gate. Stated
+plainly rather than papered over.
+
+### D20. The same review found the instrument exemption was ungated
+
+`class_retry_budget` skipped the class budget whenever `instrument_updated` was set —
+including for `RISK_DECLINE` and `MANDATE_REVOKED`. Both carry a zero charge budget for
+reasons a replacement card does not answer: a risk block is a decision about the transaction,
+and a revoked mandate is a withdrawal of consent. The exemption now applies only to
+`INSTRUMENT_INVALID`, the one cause it was ever argued for.
+
+### D21. The experiment found the flagship intervention had never run
+
+**Problem.** The first full experiment showed `INSTRUMENT_INVALID` recovering **1 of 34**
+subjects, and **zero of 34** instrument-update requests converting. At a 35% conversion
+assumption, zero is a probability of about 1 in 10 million — a bug, not luck.
+
+**Root cause.** Spec R8 says the planner chooses a *starting tier* from the failure class, and
+the dead-card plan starts at T2 — asking for a new card, rather than sending a neutral notice
+about a payment that was never going to succeed. My ladder required tier N−1 to have executed
+before tier N could open. T1 never runs for that class, so T2 was permanently shut and
+**every one of those subjects had its entire intervention blocked**. I had implemented
+advancement and never implemented starting tiers.
+
+**Decision.** `LadderState` carries a `starting_tier`, taken from the minimum tier in the
+plan. Tiers at or below it are enterable; above it, advancement is still earned by execution
+— which was the property worth having. Dead-card recoveries went 1 → 7, worth +₹14,494 on
+that class alone.
+
+**Why this is the strongest argument for the harness.** A demo would have shown a working
+pipeline, a full audit trail and a plausible number. Only running both arms and comparing
+them revealed that the intervention the whole product is built around was recovering nothing.
+
+### D22. The treatment arm was never actually paired
+
+The control arm passed `paired_seed`; the runner did not. The two arms were drawing from
+differently-consumed streams, so part of the measured difference was the dice rather than the
+intervention. Fixed by threading the same seed through both.
+
+### D23. The result refuses the headline claim, and I am not retuning to fix that
+
+**What the sweep says**, on 200 subjects, seed 3, after both bugs were fixed:
+
+| Finding | Low | Mid | High | Verdict |
+|---|---|---|---|---|
+| Gross recovered | −₹1,498 | ₹0 | +₹3,998 | **does not survive** |
+| Net recovered | −₹825 | +₹599 | +₹4,546 | **does not survive** |
+| Recovery rate | −1.1pp | 0.0pp | +1.1pp | **does not survive** |
+| Attempts per recovery | −1.9 | −1.1 | −0.8 | **survives** |
+| Wasted attempts avoided | 126 | 126 | 130 | **survives** |
+
+Recoup wins decisively where root cause matters — dead cards, +₹14,494 — and avoids ~126
+charge attempts that could never have succeeded. But it **does not recover more money** than
+blind retrying. It loses ₹7,997 on `INSUFFICIENT_FUNDS` and ₹1,498 on `TRANSIENT_ISSUER`,
+because its budgets give those causes 2 retries where the baseline takes 3.
+
+**Decision.** Report it. The obvious "fix" is to raise the funds budget to 3 and watch gross
+lift turn positive — which is exactly the tuning the frozen configuration hash and the
+three-band sweep exist to prevent. The configuration was frozen before this run
+(`53ffabac5f4d18f0`). Changing budgets now to chase a favourable number would invalidate
+every other figure in the report.
+
+The spec anticipated this outcome in R9: *"If Recoup recovers a higher share of subscriptions
+but a lower share of rupees... that is a finding, not a defect to hide."*
+
+**The honest headline is efficiency, not money:** the same recovery for materially fewer
+attempts, with the waste concentrated where it cannot pay off.
+
+**A caveat that runs the other way.** `RISK_DECLINE` shows −₹4,999 because the baseline
+recovered one risk-blocked subject by blind retry while Recoup routes all twelve to manual
+review — and the model credits manual review with **zero** recovery. A real queue would
+recover some. That understates Recoup, and is stated rather than quietly corrected.
+
+### D24. Two process mistakes of my own
+
+**`git add -A` twice swept unrelated work into a commit whose message described only part of
+it.** Caught both times before pushing and split into honest commits. The lesson is to stage
+explicitly, which costs seconds and keeps history readable.
+
+**The test suite took three minutes** because the audit log fsynced once per record and a
+cohort writes thousands. Write-ahead logging with a relaxed sync brought it to seconds
+without giving up the append-per-decision guarantee.
