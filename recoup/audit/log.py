@@ -13,6 +13,7 @@ than in whatever order SQLite feels like returning them.
 import csv
 import json
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,7 +57,13 @@ class AuditLog:
     def __init__(self, db_path: Path, jsonl_path: Path | None = None) -> None:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self._db_path)
+        # An ASGI server handles each request on a worker thread, so the
+        # connection cannot be pinned to the thread that opened it -- the live
+        # webhook receiver would otherwise raise on every single event. Writes
+        # are serialised by the lock below, which is what SQLite wants anyway:
+        # many readers, one writer.
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        self._lock = threading.Lock()
         # Write-ahead logging with a relaxed sync keeps the append-per-decision
         # guarantee while removing an fsync from every single record. A cohort
         # run writes thousands of rows and the default settings made that the
@@ -72,6 +79,10 @@ class AuditLog:
             self._jsonl_path.parent.mkdir(parents=True, exist_ok=True)
 
     def append(self, record: AuditRecord) -> None:
+        with self._lock:
+            self._append_locked(record)
+
+    def _append_locked(self, record: AuditRecord) -> None:
         self._conn.execute(
             "INSERT INTO audit (record_id, subscription_id, virtual_time, real_time, stage, payload)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -91,7 +102,8 @@ class AuditLog:
 
     def _query(self, where: str = "", params: tuple[Any, ...] = ()) -> list[AuditRecord]:
         sql = f"SELECT {', '.join(_COLUMNS)} FROM audit {where} ORDER BY virtual_time, seq"
-        rows = self._conn.execute(sql, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
         return [
             AuditRecord(
                 record_id=row[0],
@@ -135,4 +147,5 @@ class AuditLog:
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
