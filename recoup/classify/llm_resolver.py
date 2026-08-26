@@ -39,7 +39,17 @@ causes.
 "rationale": "<one sentence>"}}
 """
 
-MAX_TOKENS = 300
+MAX_TOKENS = 2000
+"""Generous on purpose.
+
+A budget sized for the visible answer starves any model that reasons before it
+writes, because those tokens come out of the same allowance. A real decline was
+classified correctly as TRANSIENT_ISSUER and then truncated mid-JSON at 300,
+so the guardrail discarded it and fell back -- safe, but a correct answer lost
+to an accounting mistake rather than to a wrong model.
+
+The reply itself is one short object, so a large ceiling costs nothing when the
+model is concise and rescues the answer when it is not."""
 
 
 def build_user_prompt(event: FailureEvent) -> str:

@@ -25,7 +25,9 @@ from recoup.plan.fallback import build_plan
 
 MAX_DELAY_HOURS = 168
 MAX_ACTIONS = 8
-MAX_TOKENS = 900
+MAX_TOKENS = 3000
+"""Same reasoning as the resolver: models that think before answering spend
+this allowance on the thinking, and a truncated plan is discarded whole."""
 
 PLANNER_SYSTEM = f"""You plan recovery interventions for failed subscription auto-debits \
 in India.

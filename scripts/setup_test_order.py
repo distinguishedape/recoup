@@ -33,12 +33,21 @@ CHECKOUT_TEMPLATE = """<!doctype html>
 <body style="font-family: system-ui; max-width: 40rem; margin: 4rem auto; line-height: 1.6">
 <h1>Fail a test payment</h1>
 <p>Order <code>{order_id}</code> for Rs {amount_inr}.</p>
-<p>Pay with a card Razorpay declines on purpose, so the failure is real rather
-than simulated:</p>
-<ul>
-  <li><strong>4000 0000 0000 0002</strong> - declined by the issuer</li>
-  <li>Any future expiry, any CVV, any name.</li>
-</ul>
+<p>Pay with one of Razorpay's documented error-scenario cards, so the decline is
+real and carries a specific reason the classifier can act on. Use any future
+expiry and any random CVV, then <strong>choose Failure</strong> on the mock bank
+page that follows.</p>
+<table cellpadding="6" style="border-collapse:collapse">
+  <tr><th align="left">Card number</th><th align="left">Reason it produces</th><th align="left">Recoup classifies as</th></tr>
+  <tr><td><code>4100 2800 0008 0001</code></td><td>insufficient_funds</td><td>INSUFFICIENT_FUNDS</td></tr>
+  <tr><td><code>4100 2800 0003 0006</code></td><td>card_disabled_for_online_payments</td><td>INSTRUMENT_INVALID</td></tr>
+  <tr><td><code>4100 2800 0002 0007</code></td><td>gateway_technical_error</td><td>TRANSIENT_ISSUER</td></tr>
+  <tr><td><code>4100 2800 0006 0003</code></td><td>card_declined</td><td>ambiguous, goes to the model</td></tr>
+  <tr><td><code>4100 2800 0000 0009</code></td><td>authentication_failed</td><td>UNCLASSIFIED</td></tr>
+</table>
+<p style="color:#666">Card numbers are from Razorpay's published test-card page.
+Each one exercises a different branch of the classifier on a genuinely real,
+signed webhook.</p>
 <button id="pay" style="font-size:1.1rem;padding:.75rem 1.5rem">Pay Rs {amount_inr}</button>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
@@ -115,8 +124,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"amount:    Rs {result.amount_paise / 100:.2f}")
     print(f"open this: {result.checkout_path.resolve()}")
     print()
-    print("Pay with 4000 0000 0000 0002 to produce a real declined payment,")
-    print("which fires payment.failed at your registered webhook URL.")
+    print("Serve it over http rather than opening the file directly --")
+    print("Razorpay Checkout needs a real origin:")
+    print(f"    python -m http.server 8080 --directory {result.checkout_path.parent}")
+    print(f"    then open http://localhost:8080/{result.checkout_path.name}")
+    print()
+    print("Pay with 4100 2800 0008 0001 and choose Failure on the bank page to")
+    print("produce a real insufficient_funds decline, which fires payment.failed.")
     return 0
 
 

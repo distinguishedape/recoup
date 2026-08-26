@@ -97,3 +97,21 @@ def test_an_unreachable_model_falls_back_rather_than_raising(tmp_path):
     assert result.failure_class is FailureClass.UNCLASSIFIED
     assert result.method == "fallback"
     assert "unavailable" in result.rationale.lower()
+
+
+def test_a_truncated_response_falls_back_rather_than_half_parsing(tmp_path):
+    # This happened on real Razorpay data: the model classified a gateway
+    # failure correctly and the reply was cut off mid-object by too small a
+    # token budget. Discarding it is right; acting on half an object would not
+    # be. The budget was raised so the answer survives, and this guards the
+    # behaviour if it ever truncates again.
+    truncated = '{"failure_class": "TRANSIENT_ISSUER", "confidence": 0.6, "'
+    result = resolve(event(), client_returning(truncated, tmp_path))
+    assert result.failure_class is FailureClass.UNCLASSIFIED
+    assert result.method == "fallback"
+
+
+def test_the_token_budget_leaves_room_for_a_model_that_reasons_first():
+    from recoup.classify.llm_resolver import MAX_TOKENS
+
+    assert MAX_TOKENS >= 1000
