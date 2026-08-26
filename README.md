@@ -35,32 +35,54 @@ The baseline runs that last row for **every** one of those causes.
 
 ## What the experiment actually found
 
-Run over 200 failed charges against the baseline ladder, with paired random
-draws and a three-band sensitivity sweep:
+Both arms, same cohort, paired per-subject random draws, three probability
+bands, four seeds at 2,000 subjects each.
 
-| Finding | Low | Mid | High | Verdict |
-|---|---|---|---|---|
-| Gross recovered | −₹1,498 | ₹0 | +₹3,998 | does not survive |
-| Net recovered | −₹825 | +₹599 | +₹4,546 | does not survive |
-| Recovery rate | −1.1pp | 0.0pp | +1.1pp | does not survive |
-| Attempts per recovery | −1.9 | −1.1 | −0.8 | **survives** |
-| Wasted attempts avoided | 126 | 126 | 130 | **survives** |
+**Recoup recovers about 2% less money than blind retrying, and avoids about
+two-thirds of the attempts that could never have worked.**
 
-**Recoup does not recover more money than blind retrying.** It recovers roughly
-the same money using materially fewer attempts, and it avoids ~126 charge
-attempts that could never have succeeded. On dead cards specifically — where
-root cause matters most — it recovers **7 subjects where the baseline recovers
-1**, worth +₹14,494.
+| | Mid band, n=2000, 4 seeds |
+|---|---|
+| Gross recovered vs baseline | **−2.26%** (range −1.55% to −2.86%) |
+| Net recovered vs baseline | **−1.97%** (range −1.26% to −2.58%) |
+| Charge attempts avoided | 4,475 across 8,000 subjects |
+| Wasted attempts avoided | ~1,360 per 2,000 (~68% of the baseline's waste) |
 
-Where it loses: its budgets give funds declines 2 retries where the baseline
-takes 3. Raising that budget would turn the money lift positive, which is
-exactly the tuning the frozen configuration hash and the three-band sweep exist
-to prevent. See [`docs/decisions.md`](docs/decisions.md) D23.
+On dead cards specifically — the one cause where knowing the reason changes
+what you should do — Recoup recovers **7 subjects where the baseline recovers
+1**.
 
-A finding is reported as surviving only if it points the right way at **all
-three** bands. That rule is computed in code and printed verbatim; there is no
-path by which a flattering number reaches the report with a claim the sweep
-did not support.
+### Why it loses, and what that actually tells you
+
+Recoup gives funds declines 2 retries where the baseline takes 3. That trades
+recovery for attempt-thrift. The question is whether the thrift is worth it:
+
+```
+charge attempts avoided : 4,475
+gross recovery given up : ₹184,935
+break-even attempt cost : ₹41.33   (assumed: ₹3.00)
+```
+
+**An attempt would have to cost 14× more than assumed before the saving pays
+for the recovery it gives up.** At ₹3 against plan values averaging ~₹1,500,
+attempt-thrift is close to worthless.
+
+That is the real finding, and it is not a bug — it is the economics. Recoup's
+design wins when attempts are expensive or when over-dunning has a price. This
+model gives **zero** weight to not harassing customers: no churn risk from
+excess contact, no support load, no compliance exposure. Those are precisely
+the costs the compliance machinery exists to control, and the scoreboard
+ignores all of them, so it is structurally biased against the agent it is
+scoring.
+
+### A held-out slice caught a result that did not replicate
+
+The registered cohort (seed 3, n=200) showed **all five findings surviving,
+including money**. The held-out cohort (seed 11, same frozen configuration)
+showed money **not** surviving. Scaling to n=2000 across four seeds settled it:
+the money lift is consistently negative and the n=200 win was noise.
+
+Reporting the first run alone would have been a clean sweep and a lie.
 
 ## Honesty about what is simulated
 
@@ -98,7 +120,7 @@ each blocked action and the rule that blocked it.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 397 tests
+python -m pytest -q                       # 403 tests
 
 python -m scripts.run_experiment --cohort-size 200 --seed 3 --out-dir artifacts --no-llm --freeze
 ```

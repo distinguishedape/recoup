@@ -16,7 +16,10 @@ Three design points worth stating because a judge will ask:
   The zero budget on an invalid instrument exists to stop us hammering
   the card that already declined; once the customer has supplied a new
   one, refusing to charge it would throw away the recovery the ladder
-  just earned. That exemption is bounded and counted separately.
+  just earned. Each replacement is chargeable exactly once, enforced by
+  the instrument's identity rather than by a count the caller keeps --
+  a count can be reset by a stale snapshot and silently make a
+  zero-budget cause unlimited.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -33,7 +36,6 @@ IST = timezone(timedelta(hours=5, minutes=30))
 CONTACT_WINDOW_START_HOUR = 8
 CONTACT_WINDOW_END_HOUR = 19
 MIN_CONTACT_GAP_HOURS = 24
-MAX_POST_UPDATE_CHARGES = 1
 
 TERMINAL_ACTION_TYPES = frozenset({ActionType.STOP, ActionType.ESCALATE_MANUAL_REVIEW})
 
@@ -56,8 +58,12 @@ class PolicyContext(BaseModel):
     opted_out: bool
     promise_to_pay_until: datetime | None
     last_contact_at: datetime | None
-    instrument_updated: bool = False
-    post_update_charges_used: int = 0
+    replacement_instrument_id: str | None = None
+    """Identity of a replacement instrument the customer supplied, if any."""
+    charged_instrument_ids: frozenset[str] = frozenset()
+    """Replacement instruments already charged. Identity rather than a counter:
+    a counter owned by the caller can be reset by a stale snapshot or a retry
+    loop, and a zero-budget cause then becomes unlimited."""
 
     @field_validator("now", "promise_to_pay_until", "last_contact_at")
     @classmethod
@@ -159,20 +165,19 @@ def class_retry_budget(action: Action, context: PolicyContext) -> PolicyVerdict:
         return _allow(rule, "terminal actions are not budgeted")
     budget = budget_for(context.failure_class)
     if action.type is ActionType.RETRY_CHARGE:
-        if (
-            context.instrument_updated
-            and context.failure_class in INSTRUMENT_UPDATE_EXEMPT_CLASSES
-        ):
-            # A new instrument is not a retry of the old one. Allow a bounded
-            # number of charges on it regardless of the class budget, which
-            # exists to stop us hammering the instrument that already failed.
-            if context.post_update_charges_used >= MAX_POST_UPDATE_CHARGES:
+        replacement = context.replacement_instrument_id
+        if replacement is not None and context.failure_class in INSTRUMENT_UPDATE_EXEMPT_CLASSES:
+            # A new instrument is not a retry of the old one, so the class
+            # budget -- which exists to stop us hammering the instrument that
+            # already failed -- does not apply to it. Each replacement is
+            # chargeable exactly once, and that is enforced by its identity
+            # rather than by a count the caller maintains.
+            if replacement in context.charged_instrument_ids:
                 return _deny(
                     rule,
-                    f"instrument was updated but {context.post_update_charges_used} charge(s) "
-                    f"have already been attempted on it (max {MAX_POST_UPDATE_CHARGES})",
+                    f"replacement instrument {replacement!r} has already been charged once",
                 )
-            return _allow(rule, "charging a freshly updated instrument")
+            return _allow(rule, f"charging replacement instrument {replacement!r}")
         if context.charge_retries_used >= budget.charge_retries:
             return _deny(
                 rule,

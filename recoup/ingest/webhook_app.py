@@ -123,7 +123,26 @@ def _default_app() -> FastAPI:
     return create_app(config, audit)
 
 
+class _MisconfiguredApp:
+    """Stands in for the app when credentials are absent.
+
+    ``app = None`` made uvicorn fail with an opaque message about a NoneType
+    not being callable, which tells an operator nothing about what is actually
+    wrong. This raises the original error, naming the missing variables, at the
+    moment someone tries to serve it -- while still importing cleanly so the
+    test suite can collect this module without credentials present.
+    """
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    async def __call__(self, scope, receive, send):  # pragma: no cover - uvicorn path
+        raise RuntimeError(
+            f"the webhook receiver is not configured: {self._error}"
+        ) from self._error
+
+
 try:  # pragma: no cover - exercised by uvicorn, not by the tests
-    app = _default_app()
-except Exception:  # credentials absent during test collection
-    app = None
+    app: object = _default_app()
+except Exception as exc:  # credentials absent, e.g. during test collection
+    app = _MisconfiguredApp(exc)

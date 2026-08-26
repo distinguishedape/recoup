@@ -652,3 +652,105 @@ regardless of how convenient a heredoc looks.
 The last one is the argument for the whole approach. A demo would have shown a working
 pipeline, a full audit trail, and a plausible number — and three of those six defects would
 have shipped inside it.
+
+
+---
+
+## Phase 9 — Fixing the defects, and what that changed
+
+### D29. The pairing fix in Plan C was itself half-broken
+
+**Problem.** `SimulatedRail` kept one random stream per subject, shared between the charge roll
+and the instrument-conversion roll. In the treatment arm an `INSTRUMENT_INVALID` subject spent
+draw #1 on the conversion roll, so its first charge used draw #2 — while the control arm's
+first charge used draw #1.
+
+Demonstrated directly: control charge draws `[0.3152, 0.0893, 0.1945]`, treatment charge draws
+`[0.0893, 0.1945, 0.5621]`. The treatment arm was literally using the control arm's second
+draw as its first.
+
+The arms were **not** facing identical luck for exactly the class where they differ most, and
+that class carries the largest claimed win. Pairing was weaker than the commit claimed.
+
+**Decision.** Scope streams by purpose as well as subject: `(seed, subscription_id, "charge")`
+and `(seed, subscription_id, "convert")`. A subject's charge outcomes are now identical across
+arms regardless of what else either arm did to it. Three tests cover it.
+
+### D30. The post-update bound only existed in the caller's discipline
+
+The policy review flagged this as unverifiable from its diff and I never followed up.
+Reproduced it: a caller that never increments `post_update_charges_used` gets **10 of 10**
+charges allowed on a cause whose budget is deliberately zero. A stale snapshot, a retry loop,
+or a second update mistaken for the first would all do it.
+
+**Decision.** Replace the boolean-plus-counter with the instrument's *identity*.
+`PolicyContext` now carries `replacement_instrument_id` and the set of
+`charged_instrument_ids`. Charging twice requires naming the same instrument twice, which the
+engine can see. A count can be reset by accident; an identity cannot. The bound is now the
+number of instruments the customer actually supplied, which is the correct semantic rather
+than an arbitrary constant.
+
+### D31. The held-out slice did its job on the first run
+
+With pairing fixed, the registered cohort (seed 3, n=200) showed **all five findings
+surviving, including money**. That is the result I wanted.
+
+The held-out cohort (seed 11, same frozen configuration) showed money **not** surviving.
+
+Scaling to n=2000 across four seeds settled it: gross lift is −1.55% to −2.86%, consistently
+negative. The n=200 win was noise, and reporting it alone would have been a clean sweep and a
+lie.
+
+**This is the single strongest argument for building the harness.** The temptation to publish
+the first run was real, and the only thing standing against it was machinery built before the
+number was known.
+
+### D32. The economics, not the budgets, are the finding
+
+Recoup gives funds declines 2 retries where the baseline takes 3, trading recovery for
+attempt-thrift. Whether that trade is good is arithmetic:
+
+```
+charge attempts avoided : 4,475   (across 8,000 subjects)
+gross recovery given up : ₹184,935
+break-even attempt cost : ₹41.33
+assumed attempt cost    : ₹3.00
+```
+
+**An attempt must cost 14× more than assumed before the saving pays for the recovery it gives
+up.** At ₹3 against plan values averaging ~₹1,500, attempt-thrift is nearly worthless.
+
+**Decision.** Report it as the finding rather than fixing the budgets to hide it. Raising the
+funds budget to 3 would close the gap and would also be tuning against a known answer, which
+the frozen hash exists to prevent.
+
+**The caveat that runs the other way, stated because it is load-bearing.** The scoreboard
+gives **zero** weight to not harassing customers: no churn risk from excess contact, no
+support load, no compliance exposure, and manual review credited with zero recovery. Those are
+precisely the costs the compliance machinery exists to control. The model is structurally
+biased against the agent it is scoring, and the honest conclusion is that Recoup's design pays
+when attempts are expensive or when over-dunning has a price — neither of which this
+simulation prices.
+
+### D33. Two smaller ones
+
+`app = None` on missing credentials made uvicorn fail with an opaque `NoneType is not
+callable`. Replaced with a stand-in that raises the original error naming the missing
+variables, while still importing cleanly so tests can collect the module without credentials.
+
+The `rules.py` docstring still described the old counter-based bound after the mechanism
+changed. Comments that describe code that no longer exists are worse than no comments.
+
+### Still open
+
+- **The LLM path has never made a real call.** Every run used `--no-llm` because no
+  `ANTHROPIC_API_KEY` is present in this environment. The classifier's model branch, the
+  planner's model branch, and the response cache's reproducibility guarantee are all covered
+  by tests with injected transports, but none has been exercised against the actual model.
+  This is the largest remaining gap and it needs a key to close.
+- **The live Razorpay webhook has never been received.** Same reason: no test-mode
+  credentials. The receiver is tested against a captured payload through FastAPI's client;
+  the runbook covers the click-path from credentials to an ingested event.
+- **Cost constants remain declared assumptions** (₹3.00 per charge, ₹0.20 per email, ₹0.25
+  per SMS). D32 shows the headline result is highly sensitive to the first of these, so real
+  Razorpay pricing would be the single most valuable substitution available.

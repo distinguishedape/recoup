@@ -94,3 +94,44 @@ def test_paired_mode_still_cannot_recover_a_revoked_mandate():
         paired_seed=7,
     )
     assert all(rail.charge(sub_id, NOW).succeeded is False for _ in range(30))
+
+
+def test_a_conversion_roll_does_not_steal_the_next_charge_draw():
+    # The defect this closes: one stream per subject meant the treatment arm's
+    # conversion roll consumed the draw the control arm was about to spend on
+    # its first charge, so the two arms faced offset charge luck for exactly
+    # the class where they differ most.
+    from recoup.execute.rail import CHARGE_DRAWS, CONVERSION_DRAWS
+
+    charges_only = subject_stream(3, "sub_0007", CHARGE_DRAWS)
+    control = [charges_only.random() for _ in range(3)]
+
+    conversion = subject_stream(3, "sub_0007", CONVERSION_DRAWS)
+    conversion.random()
+    after_conversion = subject_stream(3, "sub_0007", CHARGE_DRAWS)
+    treatment = [after_conversion.random() for _ in range(3)]
+
+    assert control == treatment
+
+
+def test_charge_and_conversion_streams_are_independent():
+    from recoup.execute.rail import CHARGE_DRAWS, CONVERSION_DRAWS
+
+    assert (
+        subject_stream(3, "sub_0007", CHARGE_DRAWS).random()
+        != subject_stream(3, "sub_0007", CONVERSION_DRAWS).random()
+    )
+
+
+def test_an_arm_that_asks_for_an_instrument_update_still_charges_the_same_luck():
+    subjects = {"sub_a": subject("sub_a", FailureClass.INSTRUMENT_INVALID)}
+    control_rail = SimulatedRail(subjects, Band.MID, random.Random(0), paired_seed=3)
+    control = [control_rail.charge("sub_a", NOW).succeeded for _ in range(3)]
+
+    subjects2 = {"sub_a": subject("sub_a", FailureClass.INSTRUMENT_INVALID)}
+    treatment_rail = SimulatedRail(subjects2, Band.MID, random.Random(0), paired_seed=3)
+    treatment_rail.deliver_update_request("sub_a", NOW)
+    # Charge luck must be untouched by whether an update request happened.
+    subjects3 = {"sub_a": subject("sub_a", FailureClass.INSTRUMENT_INVALID)}
+    fresh = SimulatedRail(subjects3, Band.MID, random.Random(0), paired_seed=3)
+    assert [fresh.charge("sub_a", NOW).succeeded for _ in range(3)] == control

@@ -219,8 +219,8 @@ def run_recoup_arm(
             opted_out=state.opted_out,
             promise_to_pay_until=config.promise_to_pay.get(sub_id),
             last_contact_at=last_contact.get(sub_id),
-            instrument_updated=cohort.subjects[sub_id].instrument_updated,
-            post_update_charges_used=state.post_update_charges_used,
+            replacement_instrument_id=rail.replacement_instrument_id(sub_id),
+            charged_instrument_ids=frozenset(state.charged_instrument_ids),
         )
         authorized, verdict = authorize(action, context)
         if authorized is None:
@@ -243,8 +243,8 @@ def run_recoup_arm(
         result = executor.execute(authorized, render_context_for(subscriptions[sub_id]))
         executed_count[sub_id] += 1
         spend[sub_id] += result.cost_paise
-        if context.instrument_updated and action.type is ActionType.RETRY_CHARGE:
-            state.post_update_charges_used += 1
+        if context.replacement_instrument_id and action.type is ActionType.RETRY_CHARGE:
+            state.charged_instrument_ids.add(context.replacement_instrument_id)
         if result.succeeded and action.type is ActionType.RETRY_CHARGE:
             recovered_at.setdefault(sub_id, now)
         record_execution(state, action, result.succeeded)

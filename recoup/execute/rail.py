@@ -43,17 +43,31 @@ def canonical_decline(failure_class: FailureClass) -> tuple[str, str, str]:
     return _DECLINES[failure_class]
 
 
-def subject_stream(paired_seed: int, subscription_id: str) -> random.Random:
-    """A random stream belonging to one subject in one experiment.
+CHARGE_DRAWS = "charge"
+CONVERSION_DRAWS = "convert"
+
+
+def subject_stream(
+    paired_seed: int, subscription_id: str, purpose: str = CHARGE_DRAWS
+) -> random.Random:
+    """A random stream belonging to one subject, for one kind of decision.
 
     Paired comparison needs subject *n* to face identical luck in both arms. A
     single shared stream cannot do that: the arms consume draws in different
     orders and different quantities, so by the tenth subject the two arms are
-    comparing different dice. Deriving each subject's stream from
-    ``(seed, subscription_id)`` makes the draw sequence a property of the
-    subject rather than of the order the loop happened to visit them.
+    comparing different dice. Deriving the stream from
+    ``(seed, subscription_id)`` makes the sequence a property of the subject
+    rather than of the order the loop happened to visit them.
+
+    Scoping by ``purpose`` is the other half, and the half that was missing.
+    With one stream per subject, the treatment arm's conversion roll consumed
+    the draw the control arm was about to spend on its first charge, so the two
+    arms faced *offset* charge luck for exactly the class where they differ
+    most. Separate streams per kind of decision mean a subject's charge
+    outcomes are identical across arms no matter what else either arm did to
+    it.
     """
-    material = f"{paired_seed}:{subscription_id}".encode("utf-8")
+    material = f"{paired_seed}:{subscription_id}:{purpose}".encode("utf-8")
     return random.Random(int.from_bytes(hashlib.sha256(material).digest()[:8], "big"))
 
 
@@ -78,6 +92,9 @@ class SimSubject(BaseModel):
     first_failure_at: datetime
     attempts_made: int = 0
     instrument_updated: bool = False
+    instrument_version: int = 0
+    """Bumped each time the customer supplies a replacement. Zero means the
+    original instrument, the one that already failed."""
 
 
 class PaymentRail(Protocol):
@@ -98,14 +115,15 @@ class SimulatedRail:
         self._band = band
         self._rng = rng
         self._paired_seed = paired_seed
-        self._streams: dict[str, random.Random] = {}
+        self._streams: dict[tuple[str, str], random.Random] = {}
 
-    def _stream(self, subscription_id: str) -> random.Random:
+    def _stream(self, subscription_id: str, purpose: str) -> random.Random:
         if self._paired_seed is None:
             return self._rng
-        if subscription_id not in self._streams:
-            self._streams[subscription_id] = subject_stream(self._paired_seed, subscription_id)
-        return self._streams[subscription_id]
+        key = (subscription_id, purpose)
+        if key not in self._streams:
+            self._streams[key] = subject_stream(self._paired_seed, subscription_id, purpose)
+        return self._streams[key]
 
     def _subject(self, subscription_id: str) -> SimSubject:
         try:
@@ -121,7 +139,7 @@ class SimulatedRail:
             probability = retry_success_probability(
                 subject.latent_class, self._band, subject.attempts_made
             )
-        succeeded = self._stream(subscription_id).random() < probability
+        succeeded = self._stream(subscription_id, CHARGE_DRAWS).random() < probability
         subject.attempts_made += 1
         if succeeded:
             return ChargeResult(succeeded=True)
@@ -136,9 +154,26 @@ class SimulatedRail:
         subject = self._subject(subscription_id)
         if subject.instrument_updated:
             return True
-        converted = self._stream(subscription_id).random() < update_conversion_probability(
+        converted = self._stream(
+            subscription_id, CONVERSION_DRAWS
+        ).random() < update_conversion_probability(
             self._band
         )
         if converted:
             subject.instrument_updated = True
+            subject.instrument_version += 1
         return converted
+
+    def replacement_instrument_id(self, subscription_id: str) -> str | None:
+        """Identity of the replacement instrument, or None if none was supplied.
+
+        The policy engine needs an identity rather than a flag: a bounded
+        "charges so far" counter owned by the caller can be reset by a stale
+        snapshot or a retry loop, and a zero-budget cause then becomes
+        unlimited. An identity cannot be reset by accident -- charging twice
+        requires naming the same instrument twice, which the engine can see.
+        """
+        subject = self._subject(subscription_id)
+        if subject.instrument_version == 0:
+            return None
+        return f"{subscription_id}:instrument:v{subject.instrument_version}"

@@ -55,8 +55,8 @@ def context(**overrides) -> PolicyContext:
         opted_out=False,
         promise_to_pay_until=None,
         last_contact_at=None,
-        instrument_updated=False,
-        post_update_charges_used=0,
+        replacement_instrument_id=None,
+        charged_instrument_ids=frozenset(),
     )
     base.update(overrides)
     return PolicyContext(**base)
@@ -154,20 +154,52 @@ def test_a_dead_card_can_never_be_charged_however_the_plan_was_built():
     assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
 
 
-def test_a_freshly_updated_instrument_may_be_charged_once():
+def test_a_replacement_instrument_may_be_charged_once():
     ctx = context(
         failure_class=FailureClass.INSTRUMENT_INVALID,
-        instrument_updated=True,
-        post_update_charges_used=0,
+        replacement_instrument_id="sub_1:instrument:v1",
     )
     assert class_retry_budget(charge(at_ist(10)), ctx).allowed is True
 
 
-def test_a_freshly_updated_instrument_may_not_be_charged_twice():
+def test_a_replacement_instrument_may_not_be_charged_twice():
     ctx = context(
         failure_class=FailureClass.INSTRUMENT_INVALID,
-        instrument_updated=True,
-        post_update_charges_used=1,
+        replacement_instrument_id="sub_1:instrument:v1",
+        charged_instrument_ids=frozenset({"sub_1:instrument:v1"}),
+    )
+    assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
+
+
+def test_the_bound_survives_a_caller_that_forgets_to_record_anything():
+    # The weakness this closes. The bound used to be a count the caller kept,
+    # so a stale snapshot or a retry loop that never incremented it granted
+    # unlimited charges on a cause whose budget is deliberately zero. Identity
+    # cannot be reset by accident: charging twice means naming the same
+    # instrument twice, and the engine can see that.
+    ctx = context(
+        failure_class=FailureClass.INSTRUMENT_INVALID,
+        replacement_instrument_id="sub_1:instrument:v1",
+        charged_instrument_ids=frozenset({"sub_1:instrument:v1"}),
+    )
+    assert all(class_retry_budget(charge(at_ist(10)), ctx).allowed is False for _ in range(10))
+
+
+def test_a_second_genuine_replacement_is_chargeable_again():
+    # Bounded by real conversions, not by an arbitrary constant: if the
+    # customer actually supplies another card, that card gets its one charge.
+    ctx = context(
+        failure_class=FailureClass.INSTRUMENT_INVALID,
+        replacement_instrument_id="sub_1:instrument:v2",
+        charged_instrument_ids=frozenset({"sub_1:instrument:v1"}),
+    )
+    assert class_retry_budget(charge(at_ist(10)), ctx).allowed is True
+
+
+def test_a_replacement_does_not_unlock_charging_for_a_risk_block():
+    ctx = context(
+        failure_class=FailureClass.RISK_DECLINE,
+        replacement_instrument_id="sub_1:instrument:v1",
     )
     assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
 
