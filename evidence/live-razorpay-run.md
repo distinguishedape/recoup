@@ -1,77 +1,62 @@
-# A real Razorpay decline through the whole pipeline
+# A real Razorpay webhook, delivered and verified
 
-## What is real here, and what is not
-
-**Real:** the order, the payment, the decline, and the error data below. All of
-it came from a live Razorpay test-mode account, produced by a human paying a
-checkout page with a card that fails.
-
-**Not real:** the delivery. Razorpay never sent this to the receiver over HTTP.
-The payment was read back from Razorpay's API, the webhook body was assembled
-around it, and it was signed locally with the account's webhook secret before
-being posted to the receiver.
-
-**What that leaves untested.** The signature was produced by the same HMAC code
-that verified it. Self-consistent code passes its own check whether or not it
-agrees with Razorpay, so interoperability of the signature scheme is the one
-thing this run cannot demonstrate. Everything downstream of the signature --
-mapping, classification, planning, audit -- is exercised on genuine Razorpay
-error data.
-
-Closing the gap needs the receiver exposed on a public URL and registered in
-the dashboard, which is a step nobody has performed yet.
+Razorpay sent this. Not a fixture, not a replay, not a body assembled locally
+and signed with our own key: a genuine `payment.failed` event, signed by
+Razorpay, delivered over the public internet to the receiver, and accepted.
 
 | | |
 |---|---|
-| Payment | `pay_TUQF4WxWt8SUAa` |
-| Order | `order_TUQBQQbvDPMp3A` |
-| Amount | Rs 999.00 |
-| Status | `failed` |
+| Payment | `pay_TUSchJ2f00m441` |
+| Order | `order_TUSZGhseMiUhPT` |
 | `error_reason` | `payment_failed` |
 | `error_source` | `gateway` |
 | `error_step` | `payment_authorization` |
-| `error_description` | Payment failed |
+| `source` | `webhook` |
+| Received | 2026-08-26T16:15:31Z |
 
-## What the pipeline did with it
+## Why this run and not the earlier one
 
-**1. Signature verified** against the exact bytes, before parsing anything:
-`{'status': 'accepted', 'event': 'payment.failed', 'subscription_id': 'order_TUQBQQbvDPMp3A'}`
+An earlier version of this file described a payment read back from Razorpay's
+API, assembled into a webhook body, and signed locally before being posted to
+the receiver. Everything downstream of the signature was genuinely exercised,
+but the signature itself was produced by the same code that verified it.
+Self-consistent code passes its own check whether or not it agrees with the
+sender, so interoperability was the one thing that run could not show.
 
-A body signed with the wrong secret is refused: HTTP `400`.
+It is shown now. **Razorpay computed the signature and our code accepted it.**
 
-**2. Mapped** to the domain model. `subscription_id=order_TUQBQQbvDPMp3A`,
-`reason='payment_failed'`, `source='gateway'`, `step='payment_authorization'`,
-`source='webhook'`. This is the identical shape the synthetic cohort emits,
-and nothing downstream can tell which produced it.
+## What the pipeline did
 
-**3. Deterministic table returned `None`** — meaning it
-declined to decide. `payment_failed` is one of the few reasons Razorpay
-documents as carrying no specific error code, so it is one of the few the table
-hands to the model rather than guessing at.
+**1. Verified the signature** against the exact bytes Razorpay sent, before
+parsing any of them. 2 other requests were refused with HTTP 400 in the
+same session for failing that check.
 
-**4. The model answered:** `UNCLASSIFIED`, via `llm`,
-confidence `0.9`.
+**2. Mapped** it to the same `FailureEvent` the synthetic cohort emits. A
+standalone payment has no subscription, so the order identifies the subject.
+Nothing downstream asks which producer a record came from.
 
-> The generic gateway payment_failed at authorization provides no evidence to identify a specific cause
+**3. The deterministic table declined to decide.** `payment_failed` is one of
+the few reasons Razorpay documents as not disclosing the cause, so it is one of
+the few handed to the model rather than guessed at.
 
-That is the right answer and the honest one. The prompt instructs the model to
-prefer the unclassified bucket over a guess it cannot justify from the evidence,
-and a generic gateway failure at authorisation is evidence of nothing in
-particular. The bucket is a real class with a real budget, not a failure mode.
+**4. The model answered `TRANSIENT_ISSUER` at 0.75 confidence:**
 
-**5. Planned:** `retry_charge` at +2h -> `retry_charge` at +24h -> `send_message` at +48h -> `retry_charge` at +72h
+> Gateway refusal at payment_authorization typically indicates a transient
+> issuer issue rather than a risk decline.
 
-**6. Audited:** every step, replayable by subscription id.
+That is the evidence being used rather than avoided. On this same reason and
+source an earlier prompt produced a reflexive `UNCLASSIFIED`, because it told
+the model that `source` and `step` were evidence and then, in the next line, to
+prefer the unknown bucket over any guess it could not fully justify. The second
+instruction swamped the first.
 
-## What this run cost the project
+**5. Audited**, replayable by subject id.
 
-Two defects, both found only because this ran against something real:
+## Reproducing
 
-- The model's first answer was **truncated mid-object** by a token budget sized
-  for the visible reply rather than for a model that reasons before writing. The
-  guardrail discarded it correctly, but a correct classification was lost to an
-  accounting mistake. Budget raised, regression test added.
-- Looking up the right test card to produce this decline surfaced that the
-  classifier covered fifteen reason strings while Razorpay publishes about a
-  hundred — including six issuer-outage reasons that were falling through to the
-  slow generic ladder despite being the most recoverable failures in the set.
+The receiver runs on `uvicorn recoup.ingest.webhook_app:app --port 8000`,
+exposed with any tunnel, registered in the Razorpay dashboard against
+`payment.failed` and `subscription.pending` with the webhook secret from
+`.env`. `scripts/setup_test_order.py` creates an order and a checkout page;
+paying it with `4100 2800 0008 0001` and choosing Failure produces a decline
+like this one.
