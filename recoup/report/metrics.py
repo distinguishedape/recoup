@@ -53,6 +53,12 @@ class ArmMetrics(BaseModel):
     attempts_per_recovery: float
     wasted_attempts: int
     mean_hours_to_recovery: float
+    money_by_class: dict[FailureClass, int]
+    """Gross paise recovered per failure cause, so a reader can see which
+    cause carries the result rather than taking the total on trust."""
+    money_by_tier: dict[int, int]
+    """Gross paise recovered per escalation tier: how far up the ladder
+    subjects had to travel before the trip paid for itself."""
 
 
 class Comparison(BaseModel):
@@ -99,8 +105,20 @@ def compute_metrics(result: RunResult, arm: str) -> ArmMetrics:
         if o.failure_class in ZERO_RETRY_CLASSES and o.terminal is not TerminalState.RECOVERED
     )
 
+    money_by_class = {failure_class: 0 for failure_class in FailureClass}
+    money_by_tier: dict[int, int] = {}
+    for outcome in outcomes:
+        money_by_class[outcome.failure_class] += outcome.gross_recovered_paise
+        if outcome.recovered_at_tier is not None:
+            money_by_tier[outcome.recovered_at_tier] = (
+                money_by_tier.get(outcome.recovered_at_tier, 0)
+                + outcome.gross_recovered_paise
+            )
+
     return ArmMetrics(
         arm=arm,
+        money_by_class=money_by_class,
+        money_by_tier=money_by_tier,
         cohort_size=len(outcomes),
         recovered=recovered,
         voluntary_churn=voluntary,

@@ -74,6 +74,9 @@ class SubjectOutcome(BaseModel):
     actions_blocked: int
     first_failure_at: datetime | None = None
     recovered_at: datetime | None = None
+    recovered_at_tier: int | None = None
+    """Which escalation tier actually landed the recovery, so the report can
+    say how far up the ladder subjects had to travel to be worth the trip."""
 
 
 class RunResult(BaseModel):
@@ -130,6 +133,7 @@ def run_recoup_arm(
     charges: dict[str, int] = defaultdict(int)
     first_failure_at: dict[str, datetime] = {}
     recovered_at: dict[str, datetime] = {}
+    recovered_tier: dict[str, int] = {}
 
     for event in cohort.events:
         sub_id = event.subscription_id
@@ -284,6 +288,7 @@ def run_recoup_arm(
             state.charged_instrument_ids.add(context.replacement_instrument_id)
         if result.succeeded and action.type is ActionType.RETRY_CHARGE:
             recovered_at.setdefault(sub_id, now)
+            recovered_tier.setdefault(sub_id, int(action.tier))
         record_execution(state, action, result.succeeded)
         if action.type in CONTACT_ACTION_TYPES:
             last_contact[sub_id] = now
@@ -335,6 +340,7 @@ def run_recoup_arm(
                 actions_blocked=blocked_count[sub_id],
                 first_failure_at=first_failure_at.get(sub_id),
                 recovered_at=recovered_at.get(sub_id),
+                recovered_at_tier=recovered_tier.get(sub_id),
             )
         )
 

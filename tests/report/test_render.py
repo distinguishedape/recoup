@@ -95,3 +95,16 @@ def test_the_bundle_exports_the_audit_trails_for_both_arms(sweep, tmp_path):
     write_bundle(sweep, tmp_path)
     assert (tmp_path / "audit_mid_control.csv").exists()
     assert (tmp_path / "audit_mid_treatment.csv").exists()
+
+
+def test_the_report_says_which_cause_carries_the_lift(sweep):
+    report = render_report(sweep)
+    assert "Where the lift comes from" in report
+    assert "INSTRUMENT_INVALID" in report
+    assert "MANDATE_REVOKED" in report
+
+
+def test_the_report_shows_how_far_up_the_ladder_recoveries_happened(sweep):
+    report = render_report(sweep)
+    assert "How far up the ladder" in report
+    assert "T1 notify" in report

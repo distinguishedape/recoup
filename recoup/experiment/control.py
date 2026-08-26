@@ -125,6 +125,8 @@ def run_control_arm(config: RunConfig, audit: AuditLog) -> RunResult:
                 actions_blocked=0,
                 first_failure_at=cohort.subjects[sub_id].first_failure_at,
                 recovered_at=recovered_at.get(sub_id),
+                # The baseline has no ladder. Everything it does is one tier.
+                recovered_at_tier=1 if sub_id in recovered_at else None,
             )
         )
 

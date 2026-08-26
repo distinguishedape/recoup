@@ -58,6 +58,13 @@ class Action(_Frozen):
     channel: str | None
     template_id: str | None
     free_text: str | None
+    suppressed_free_text: str | None = None
+    """Copy the model wrote and was not permitted to send.
+
+    Audit only. The policy engine never reads it and the executor has no path
+    to it, so it cannot reach a customer. It exists so a reviewer can see what
+    the model wanted to say -- which is more useful than discarding the plan
+    and more honest than pretending it never proposed anything."""
     reason: str
 
 

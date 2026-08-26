@@ -104,6 +104,46 @@ def render_report(sweep: SweepResult, replication: ReplicationResult | None = No
     )
     lines.append("")
 
+    lines.append("## Where the lift comes from")
+    lines.append("")
+    lines.append(
+        "Gross recovered per failure cause, both arms. A total is easy to take on "
+        "trust; this is the table that says which causes actually earn it, and which "
+        "ones the agent gives up on deliberately."
+    )
+    lines.append("")
+    lines.append("| Cause | Baseline | Recoup | Difference |")
+    lines.append("|---|---|---|---|")
+    for failure_class in FailureClass:
+        control_money = mid.control.money_by_class.get(failure_class, 0)
+        treatment_money = mid.treatment.money_by_class.get(failure_class, 0)
+        delta = treatment_money - control_money
+        marker = "**" if abs(delta) >= 100_000 else ""
+        lines.append(
+            f"| `{failure_class.value}` | {format_rupees(control_money)} "
+            f"| {format_rupees(treatment_money)} "
+            f"| {marker}{format_rupees(delta)}{marker} |"
+        )
+    lines.append("")
+
+    lines.append("## How far up the ladder subjects travelled")
+    lines.append("")
+    lines.append(
+        "Recovered money by the escalation tier that achieved it. The baseline has no "
+        "ladder, so everything it recovers sits at a single tier."
+    )
+    lines.append("")
+    lines.append("| Tier | Baseline | Recoup |")
+    lines.append("|---|---|---|")
+    tier_names = {1: "T1 notify", 2: "T2 request action", 3: "T3 final notice", 4: "T4 terminal"}
+    for tier in sorted(set(mid.control.money_by_tier) | set(mid.treatment.money_by_tier)):
+        lines.append(
+            f"| {tier_names.get(tier, tier)} "
+            f"| {format_rupees(mid.control.money_by_tier.get(tier, 0))} "
+            f"| {format_rupees(mid.treatment.money_by_tier.get(tier, 0))} |"
+        )
+    lines.append("")
+
     lines.append("## Findings across the sensitivity sweep")
     lines.append("")
     lines.append("| Finding | Low | Mid | High | Verdict | Note |")

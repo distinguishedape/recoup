@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from recoup.llm.client import LLMClient
 from recoup.models.core import Classification, FailureEvent
 from recoup.models.enums import ActionType, FailureClass
+from recoup.execute.messages import ALLOWED_TEMPLATE_IDS
 from recoup.plan.llm_planner import PLANNER_SYSTEM, plan, propose_plan
 
 NOW = datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc)
@@ -110,7 +111,10 @@ def test_a_proposal_naming_a_template_outside_the_allowlist_is_rejected(tmp_path
     assert propose_plan(event(), classification(), client_returning(bad, tmp_path), NOW) is None
 
 
-def test_a_proposal_carrying_free_text_is_rejected(tmp_path):
+def test_free_text_never_reaches_a_customer(tmp_path):
+    # The spec asks for substitution rather than rejection here: send the
+    # approved template, keep the model's copy in the record. What must never
+    # happen is the model's own words going out, and that is what this asserts.
     bad = json.dumps(
         {
             "actions": [
@@ -126,7 +130,10 @@ def test_a_proposal_carrying_free_text_is_rejected(tmp_path):
             ]
         }
     )
-    assert propose_plan(event(), classification(), client_returning(bad, tmp_path), NOW) is None
+    result = propose_plan(event(), classification(), client_returning(bad, tmp_path), NOW)
+    assert result is not None
+    assert all(a.free_text is None for a in result.actions)
+    assert result.actions[0].template_id in ALLOWED_TEMPLATE_IDS
 
 
 def test_an_invented_action_type_is_rejected(tmp_path):
@@ -496,3 +503,54 @@ def test_a_plan_with_no_retries_is_not_scored_out_of_existence(tmp_path):
         NOW,
     )
     assert [a.type for a in result.actions] == [ActionType.STOP]
+
+
+def test_free_text_is_replaced_by_the_approved_template_and_kept_in_the_record(tmp_path):
+    # Spec scenario 2. Discarding the plan loses a good sequence over one bad
+    # sentence; substituting sends approved copy and preserves what the model
+    # wanted to say, where a reviewer can see it.
+    persuasive = json.dumps({"actions": [{
+        "type": "send_message", "delay_hours": 0, "tier": 1, "channel": "email",
+        "template_id": "t1_notify_email",
+        "free_text": "Your account will be suspended within 24 hours.",
+        "reason": "urgency"}]})
+    result = propose_plan(event(), classification(), client_returning(persuasive, tmp_path), NOW)
+    assert result is not None, "a persuasive message should be substituted, not discarded"
+    action = result.actions[0]
+    assert action.free_text is None
+    assert action.template_id == "t1_notify_email"
+    assert "suspended" in action.suppressed_free_text
+
+
+def test_free_text_with_no_approved_template_to_substitute_is_still_rejected(tmp_path):
+    no_template = json.dumps({"actions": [{
+        "type": "send_message", "delay_hours": 0, "tier": 1, "channel": "email",
+        "template_id": None, "free_text": "pay up", "reason": "no"}]})
+    assert propose_plan(event(), classification(), client_returning(no_template, tmp_path), NOW) is None
+
+
+def test_the_executor_has_no_path_to_the_suppressed_text():
+    import pathlib as _p
+
+    source = _p.Path("recoup/execute/executor.py").read_text(encoding="utf-8")
+    assert "suppressed_free_text" not in source
+    messages = _p.Path("recoup/execute/messages.py").read_text(encoding="utf-8")
+    assert "suppressed_free_text" not in messages
+
+
+def test_the_policy_rule_still_refuses_live_free_text():
+    # Substitution happens at planning time. The gate is unchanged: an action
+    # that still carries free text when it reaches the engine is denied.
+    from recoup.models.enums import Tier
+    from recoup.policy.rules import PolicyContext, template_allowlist
+    from recoup.models.core import Action as _Action
+
+    live = _Action(
+        action_id="a", subscription_id="s", type=ActionType.SEND_MESSAGE,
+        scheduled_at=NOW, tier=Tier.T1_NOTIFY, channel="email",
+        template_id="t1_notify_email", free_text="pay up", reason="x")
+    ctx = PolicyContext(
+        now=NOW, failure_class=FailureClass.INSUFFICIENT_FUNDS, contacts_sent=0,
+        charge_retries_used=0, opted_out=False, promise_to_pay_until=None,
+        last_contact_at=None)
+    assert template_allowlist(live, ctx).allowed is False

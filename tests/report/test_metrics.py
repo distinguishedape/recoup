@@ -181,3 +181,27 @@ def test_a_wasted_attempt_is_a_charge_not_a_message():
     ), "treatment")
     # Asking a customer for a new card is the remedy for this cause, not waste.
     assert m.wasted_attempts == 0
+
+
+def test_money_is_broken_down_by_failure_class():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=99900, hours=24),
+        outcome("b", TerminalState.RECOVERED, FailureClass.INSTRUMENT_INVALID, gross=49900, hours=24),
+        outcome("c", TerminalState.UNRECOVERED, FailureClass.INSUFFICIENT_FUNDS),
+    ), "treatment")
+    assert m.money_by_class[FailureClass.INSUFFICIENT_FUNDS] == 99900
+    assert m.money_by_class[FailureClass.INSTRUMENT_INVALID] == 49900
+
+
+def test_every_class_appears_even_when_it_recovered_nothing():
+    m = compute_metrics(result(outcome("a", TerminalState.UNRECOVERED)), "x")
+    assert set(m.money_by_class) == set(FailureClass)
+    assert m.money_by_class[FailureClass.MANDATE_REVOKED] == 0
+
+
+def test_the_class_breakdown_sums_to_the_total():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=99900, hours=1),
+        outcome("b", TerminalState.RECOVERED, FailureClass.TRANSIENT_ISSUER, gross=49900, hours=1),
+    ), "t")
+    assert sum(m.money_by_class.values()) == m.gross_recovered_paise

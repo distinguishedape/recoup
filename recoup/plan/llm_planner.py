@@ -93,8 +93,6 @@ def _extract_json(text: str) -> dict | None:
 def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) -> Action | None:
     if not isinstance(raw, dict):
         return None
-    if raw.get("free_text"):
-        return None
     try:
         action_type = ActionType(str(raw.get("type", "")))
         tier = Tier(int(raw.get("tier", 1)))
@@ -112,6 +110,18 @@ def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) ->
         if template_id is None or channel is None:
             return None
 
+    # Free text is substituted rather than rejected, provided an approved
+    # template covers the same moment. Throwing the plan away loses a good
+    # sequence over one bad sentence; keeping the sentence in the record and
+    # sending the template loses nothing and shows a reviewer exactly what the
+    # model wanted to say.
+    proposed_text = raw.get("free_text")
+    suppressed = str(proposed_text).strip() if proposed_text else None
+    if suppressed and template_id is None:
+        # Nothing approved to send in its place, so there is no substitution to
+        # make and the action cannot go out.
+        return None
+
     reason = str(raw.get("reason", "")).strip() or "proposed by the planning model"
     return Action(
         action_id=action_id(subscription_id, index),
@@ -122,6 +132,7 @@ def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) ->
         channel=channel,
         template_id=template_id,
         free_text=None,
+        suppressed_free_text=suppressed,
         reason=reason,
     )
 
