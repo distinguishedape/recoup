@@ -67,3 +67,67 @@ def test_a_negative_attempt_index_is_rejected():
 
 def test_a_fresh_instrument_is_very_likely_to_charge():
     assert 0.9 <= POST_UPDATE_CHARGE_SUCCESS <= 1.0
+
+
+def test_waiting_helps_a_funds_shortfall():
+    # A salary lands; the money that was missing arrives. This is the mechanism
+    # the whole payday-aligned retry schedule is built on, and the model was
+    # blind to it.
+    immediate = retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0, 1)
+    next_day = retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0, 24)
+    three_days = retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0, 72)
+    assert immediate < next_day < three_days
+
+
+def test_an_issuer_outage_recovers_within_hours_not_days():
+    at_one_hour = retry_success_probability(FailureClass.TRANSIENT_ISSUER, Band.MID, 0, 1)
+    at_six = retry_success_probability(FailureClass.TRANSIENT_ISSUER, Band.MID, 0, 6)
+    at_a_day = retry_success_probability(FailureClass.TRANSIENT_ISSUER, Band.MID, 0, 24)
+    assert at_one_hour < at_six < at_a_day
+    # Most of the available benefit arrives early, which is what justifies
+    # retrying an outage fast rather than patiently.
+    assert (at_six - at_one_hour) > (at_a_day - at_six)
+
+
+def test_waiting_does_not_repair_a_dead_card_or_a_revoked_mandate():
+    for failure_class in (
+        FailureClass.INSTRUMENT_INVALID,
+        FailureClass.MANDATE_REVOKED,
+        FailureClass.RISK_DECLINE,
+    ):
+        early = retry_success_probability(failure_class, Band.MID, 0, 1)
+        late = retry_success_probability(failure_class, Band.MID, 0, 168)
+        assert early == late
+
+
+def test_a_revoked_mandate_stays_hopeless_however_long_you_wait():
+    assert retry_success_probability(FailureClass.MANDATE_REVOKED, Band.HIGH, 0, 168) == 0.0
+
+
+def test_omitting_the_clock_keeps_the_old_attempt_only_behaviour():
+    assert retry_success_probability(
+        FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0
+    ) == 0.45
+
+
+def test_decay_still_applies_on_top_of_timing():
+    first = retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0, 72)
+    second = retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 1, 72)
+    assert second < first
+
+
+def test_probability_never_exceeds_certainty():
+    for failure_class in FailureClass:
+        for hours in (0, 1, 24, 72, 168, 10_000):
+            assert 0.0 <= retry_success_probability(failure_class, Band.HIGH, 0, hours) <= 1.0
+
+
+def test_a_negative_elapsed_time_is_rejected():
+    with pytest.raises(ValueError):
+        retry_success_probability(FailureClass.INSUFFICIENT_FUNDS, Band.MID, 0, -1)
+
+
+def test_every_class_declares_a_timing_profile():
+    from recoup.execute.probabilities import TIMING
+
+    assert set(TIMING) == set(FailureClass)

@@ -27,6 +27,70 @@ POST_UPDATE_CHARGE_SUCCESS = 0.95
 always goes through -- the root cause is gone."""
 
 
+class TimingProfile(BaseModel):
+    """How a cause's recoverability moves with elapsed time since the failure.
+
+    Without this the model could not see the product's central claim. Recovery
+    probability depended on attempt count alone, so a retry six hours after an
+    outage and a retry a day later were literally the same event. Recoup's
+    advantage lives almost entirely in *when* it retries and its cost lives in
+    *how many* times, so a model blind to timing measured the cost and none of
+    the benefit.
+
+    ``ceiling`` is the multiplier the cause approaches given unlimited time,
+    and ``half_life_hours`` is how long it takes to cover half the distance
+    from ``floor`` to ``ceiling``. A cause that recovers by waiting has a
+    ceiling above one; a cause where waiting achieves nothing has both set to
+    one and behaves exactly as before.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    floor: float
+    ceiling: float
+    half_life_hours: float
+
+
+TIMING: dict[FailureClass, TimingProfile] = {
+    # A shortfall resolves when money arrives, which for most salaried
+    # customers means a pay cycle rather than an hour. Retrying immediately is
+    # close to pointless; retrying after a few days is when it pays.
+    FailureClass.INSUFFICIENT_FUNDS: TimingProfile(
+        floor=0.45, ceiling=1.55, half_life_hours=60.0
+    ),
+    # An issuer or gateway outage clears on its own and fast. Most of the
+    # benefit is available within hours, which is why the fast retry exists.
+    FailureClass.TRANSIENT_ISSUER: TimingProfile(
+        floor=0.35, ceiling=1.25, half_life_hours=5.0
+    ),
+    # Waiting does not repair a dead card, undo a revocation, or change a risk
+    # decision, and it does not clarify a cause nobody identified. Flat.
+    FailureClass.INSTRUMENT_INVALID: TimingProfile(floor=1.0, ceiling=1.0, half_life_hours=1.0),
+    FailureClass.MANDATE_REVOKED: TimingProfile(floor=1.0, ceiling=1.0, half_life_hours=1.0),
+    FailureClass.RISK_DECLINE: TimingProfile(floor=1.0, ceiling=1.0, half_life_hours=1.0),
+    # Unknown cause, so assume a mild version of the commonest one rather than
+    # claiming waiting is worthless.
+    FailureClass.UNCLASSIFIED: TimingProfile(
+        floor=0.70, ceiling=1.20, half_life_hours=48.0
+    ),
+}
+
+
+def timing_multiplier(failure_class: FailureClass, hours_since_failure: float) -> float:
+    """How much a cause's recoverability has moved by this point in time.
+
+    Saturating exponential: starts at ``floor``, approaches ``ceiling``, half
+    the distance covered every ``half_life_hours``. Chosen because both
+    mechanisms it represents are saturating -- a salary lands once and an
+    outage ends once, and neither keeps improving forever.
+    """
+    if hours_since_failure < 0:
+        raise ValueError(f"hours_since_failure must be >= 0, got {hours_since_failure}")
+    profile = TIMING[failure_class]
+    progress = 1.0 - 0.5 ** (hours_since_failure / profile.half_life_hours)
+    return profile.floor + (profile.ceiling - profile.floor) * progress
+
+
 class BandProbabilities(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -72,12 +136,29 @@ BANDS: dict[Band, BandProbabilities] = {
 
 
 def retry_success_probability(
-    failure_class: FailureClass, band: Band, attempt_index: int
+    failure_class: FailureClass,
+    band: Band,
+    attempt_index: int,
+    hours_since_failure: float | None = None,
 ) -> float:
+    """Probability this charge attempt succeeds.
+
+    Two forces, pulling opposite ways. Each successive attempt on the same
+    subject is worth less than the last, because a card that just declined is
+    likely to decline again. But for causes that heal, waiting makes the next
+    attempt worth more.
+
+    ``hours_since_failure`` of ``None`` keeps the old attempt-only behaviour,
+    so every caller that has no clock still works and the timing model can be
+    turned off for comparison.
+    """
     if attempt_index < 0:
         raise ValueError(f"attempt_index must be >= 0, got {attempt_index}")
     base = BANDS[band].retry_success[failure_class]
-    return max(0.0, base * (RETRY_DECAY**attempt_index))
+    probability = base * (RETRY_DECAY**attempt_index)
+    if hours_since_failure is not None:
+        probability *= timing_multiplier(failure_class, hours_since_failure)
+    return max(0.0, min(1.0, probability))
 
 
 def update_conversion_probability(band: Band) -> float:

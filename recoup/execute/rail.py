@@ -136,8 +136,12 @@ class SimulatedRail:
         if subject.instrument_updated:
             probability = POST_UPDATE_CHARGE_SUCCESS
         else:
+            # ``now`` was accepted and ignored until the timing model existed,
+            # which meant a fast retry and a patient one were the same event
+            # and the whole "right time" half of the product was invisible.
+            hours = max(0.0, (now - subject.first_failure_at).total_seconds() / 3600)
             probability = retry_success_probability(
-                subject.latent_class, self._band, subject.attempts_made
+                subject.latent_class, self._band, subject.attempts_made, hours
             )
         succeeded = self._stream(subscription_id, CHARGE_DRAWS).random() < probability
         subject.attempts_made += 1
