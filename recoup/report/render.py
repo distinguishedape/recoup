@@ -18,6 +18,7 @@ from recoup.audit.log import AuditLog
 from recoup.execute.executor import CHANNEL_COST_PAISE, CHARGE_ATTEMPT_COST_PAISE
 from recoup.execute.probabilities import BANDS
 from recoup.experiment.control import CONTROL_RETRY_DELAYS_HOURS
+from recoup.experiment.replication import ReplicationResult
 from recoup.experiment.sweep import SweepResult
 from recoup.ingest.cohort import CLASS_WEIGHTS, PLAN_AMOUNTS_PAISE
 from recoup.models.enums import Band, FailureClass
@@ -77,7 +78,7 @@ def _format_value(value: float, unit: str) -> str:
     return f"{value:+.2f}"
 
 
-def render_report(sweep: SweepResult) -> str:
+def render_report(sweep: SweepResult, replication: ReplicationResult | None = None) -> str:
     mid = sweep.results[Band.MID.value]
     lines: list[str] = []
 
@@ -123,6 +124,9 @@ def render_report(sweep: SweepResult) -> str:
         "surviving, however large it is."
     )
     lines.append("")
+
+    if replication is not None:
+        lines.append(render_replication(replication))
 
     lines.append("## Per-band detail")
     lines.append("")
@@ -224,14 +228,56 @@ def render_report(sweep: SweepResult) -> str:
     return "\n".join(lines)
 
 
-def write_bundle(sweep: SweepResult, out_dir: Path) -> list[Path]:
+def render_replication(replication: ReplicationResult) -> str:
+    """The section that answers "does this hold up in another cohort"."""
+    lines: list[str] = []
+    seeds = sorted(replication.sweeps)
+    lines.append("## Does it replicate?")
+    lines.append("")
+    lines.append(
+        f"The same experiment run over {len(seeds)} independent cohorts of "
+        f"{replication.cohort_size} subjects each. A finding **replicates** only if it "
+        "survives the Low/Mid/High sweep in *every* cohort. Surviving in most of them is "
+        "reported as not replicating, for the same reason a lift that appears only at the "
+        "optimistic band is reported as not surviving: averaging is how a result that "
+        "depends on luck gets laundered into one that looks robust."
+    )
+    lines.append("")
+    header = "| Finding | " + " | ".join(f"seed {s}" for s in seeds) + " | mean | Verdict |"
+    lines.append(header)
+    lines.append("|---" * (len(seeds) + 3) + "|")
+    for finding in replication.findings:
+        cells = " | ".join(
+            _format_value(finding.per_seed[s], finding.unit) for s in seeds
+        )
+        verdict = "**replicates**" if finding.replicates else "does not replicate"
+        lines.append(
+            f"| {finding.name} | {cells} | "
+            f"{_format_value(finding.mean, finding.unit)} | {verdict} |"
+        )
+    lines.append("")
+    for finding in replication.findings:
+        if not finding.replicates:
+            lines.append(f"- `{finding.name}`: {finding.note}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_bundle(
+    sweep: SweepResult, out_dir: Path, replication: ReplicationResult | None = None
+) -> list[Path]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
     report_path = out_dir / "report.md"
-    report_path.write_text(render_report(sweep), encoding="utf-8")
+    report_path.write_text(render_report(sweep, replication), encoding="utf-8")
     written.append(report_path)
+
+    if replication is not None:
+        replication_path = out_dir / "replication.json"
+        replication_path.write_text(replication.model_dump_json(indent=2), encoding="utf-8")
+        written.append(replication_path)
 
     sweep_path = out_dir / "sweep.json"
     sweep_path.write_text(sweep.model_dump_json(indent=2), encoding="utf-8")

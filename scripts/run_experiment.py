@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from recoup.experiment.harness import freeze_config, verify_frozen_config
+from recoup.experiment.replication import run_replication
 from recoup.experiment.sweep import run_sweep
 from recoup.llm.client import LLMClient
 from recoup.models.enums import Band
@@ -31,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="refuse to run if the config changed")
     parser.add_argument("--no-llm", action="store_true",
                         help="run with the deterministic planner only")
+    parser.add_argument("--replicate", default="",
+                        help="comma-separated extra seeds; a finding replicates only if it "
+                             "survives the band sweep in every cohort")
     args = parser.parse_args(argv)
 
     config = RunConfig(
@@ -49,12 +53,26 @@ def main(argv: list[str] | None = None) -> int:
 
     client = None if args.no_llm else LLMClient(args.out_dir / "llm_cache.json")
     sweep = run_sweep(config, args.out_dir / "audit", client)
-    written = write_bundle(sweep, args.out_dir)
+
+    replication = None
+    if args.replicate:
+        seeds = [args.seed] + [int(s) for s in args.replicate.split(",") if s.strip()]
+        replication = run_replication(config, seeds, args.out_dir / "replication", client)
+
+    written = write_bundle(sweep, args.out_dir, replication)
 
     for finding in sweep.findings:
         verdict = "survives" if finding.survives else "does not survive"
         print(f"{finding.name}: {verdict} "
               f"(low {finding.low}, mid {finding.mid}, high {finding.high})")
+
+    if replication is not None:
+        print()
+        print(f"replication across {len(replication.seeds)} cohorts:")
+        for finding in replication.findings:
+            verdict = "REPLICATES" if finding.replicates else "does not replicate"
+            print(f"  {finding.name}: {verdict} "
+                  f"(survived in {len(finding.survived_in)}/{len(replication.seeds)})")
     print()
     for path in written:
         print(f"wrote {path}")

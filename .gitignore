@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 artifacts/
+!evidence/
 .env
 
 # Design spec, implementation plans and agent scratch stay local
