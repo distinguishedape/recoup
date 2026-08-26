@@ -19,3 +19,7 @@ include = ["recoup*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Two tasks legitimately name a test file test_engine.py (classify, policy).
+# importlib import mode gives each its own module identity instead of
+# deriving a name from the basename and colliding.
+addopts = "--import-mode=importlib"
