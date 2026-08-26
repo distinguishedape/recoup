@@ -107,9 +107,13 @@ Razorpay rail reads subscription state and builds hosted card-change links; its
 `charge` method **raises** rather than returning a plausible result, so
 simulated outcomes can never enter through the path labelled real.
 
-Ingestion is real. A live `subscription.pending` webhook and the synthetic
-cohort emit an identical `FailureEvent`, and nothing downstream may branch on
-which produced it.
+Ingestion is real, and has been run for real. A genuine payment declined by
+Razorpay was replayed through the receiver: signature verified against the exact
+bytes, mapped, classified by the model, planned and audited. See
+[`evidence/live-razorpay-run.md`](evidence/live-razorpay-run.md).
+
+Live webhooks and the synthetic cohort emit an identical `FailureEvent`, and
+nothing downstream may branch on which produced it.
 
 ## Compliance
 
@@ -131,7 +135,7 @@ each blocked action and the rule that blocked it.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 438 tests
+python -m pytest -q                       # 470 tests
 
 python -m scripts.run_experiment --cohort-size 200 --seed 3     --replicate 11,29,47 --out-dir artifacts --freeze
 ```
