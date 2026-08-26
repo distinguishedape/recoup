@@ -26,15 +26,18 @@ def act(index: int, action_type: ActionType) -> Action:
 @pytest.mark.parametrize(
     ("failure_class", "retries", "contacts"),
     [
-        (FailureClass.INSUFFICIENT_FUNDS, 2, 1),
+        (FailureClass.INSUFFICIENT_FUNDS, 3, 1),
         (FailureClass.INSTRUMENT_INVALID, 0, 2),
         (FailureClass.MANDATE_REVOKED, 0, 0),
-        (FailureClass.TRANSIENT_ISSUER, 2, 0),
+        (FailureClass.TRANSIENT_ISSUER, 3, 0),
         (FailureClass.RISK_DECLINE, 0, 0),
         (FailureClass.UNCLASSIFIED, 3, 1),
     ],
 )
 def test_budgets_match_the_spec_table(failure_class, retries, contacts):
+    # The zero rows are the product's actual claim: causes a retry cannot fix
+    # get none. The non-zero rows match what the baseline spends, because
+    # under-spending a recoverable cause destroys value to save a few rupees.
     budget = budget_for(failure_class)
     assert budget.charge_retries == retries
     assert budget.contacts == contacts
@@ -57,7 +60,7 @@ def test_clamping_drops_charge_retries_beyond_the_budget():
         actions=[act(i, ActionType.RETRY_CHARGE) for i in range(5)],
     )
     clamped = clamp_to_budget(plan)
-    assert len(clamped.actions) == 2
+    assert len(clamped.actions) == 3
 
 
 def test_clamping_drops_contacts_beyond_the_budget():
@@ -89,7 +92,7 @@ def test_clamping_keeps_the_earliest_actions_and_preserves_order():
         actions=[act(i, ActionType.RETRY_CHARGE) for i in range(4)],
     )
     kept = [a.action_id for a in clamp_to_budget(plan).actions]
-    assert kept == [action_id("sub_1", 0), action_id("sub_1", 1)]
+    assert kept == [action_id("sub_1", 0), action_id("sub_1", 1), action_id("sub_1", 2)]
 
 
 def test_stop_and_escalate_are_never_clamped_away():

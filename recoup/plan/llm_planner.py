@@ -17,9 +17,10 @@ import re
 from datetime import datetime, timedelta
 
 from recoup.execute.messages import ALLOWED_TEMPLATE_IDS
+from recoup.execute.probabilities import expected_recovery
 from recoup.llm.client import LLMClient, LLMUnavailable
 from recoup.models.core import Action, Classification, FailureEvent, InterventionPlan
-from recoup.models.enums import ActionType, Tier
+from recoup.models.enums import ActionType, Band, Tier
 from recoup.plan.budgets import action_id, budget_for, clamp_to_budget
 from recoup.plan.fallback import build_plan
 
@@ -139,6 +140,31 @@ def _stops_before_it_acts(actions: list[Action]) -> bool:
     )
 
 
+def _buries_the_remedy(actions: list[Action]) -> bool:
+    """True if a contact is scheduled before the instrument-update request.
+
+    When a card cannot be charged, asking for a different one is not one option
+    among several -- it is the only thing that recovers the payment. A plan that
+    sends a notice first spends a contact on saying nothing actionable *and*
+    puts the remedy behind it on the ladder, where a tier that never executed
+    keeps the next one shut.
+
+    That is not hypothetical. A model plan did exactly this: notice at tier one,
+    update request at tier two. Every action was permitted and within budget.
+    Whenever the notice fell outside the contact window the request never ran,
+    and the cause recovered nobody at all.
+    """
+    updates = [a for a in actions if a.type is ActionType.REQUEST_INSTRUMENT_UPDATE]
+    if not updates:
+        return False
+    earliest_update = min(a.scheduled_at for a in updates)
+    return any(
+        a.scheduled_at < earliest_update
+        for a in actions
+        if a.type is ActionType.SEND_MESSAGE
+    )
+
+
 def propose_plan(
     event: FailureEvent,
     classification: Classification,
@@ -166,6 +192,9 @@ def propose_plan(
             return None
         actions.append(action)
 
+    if _buries_the_remedy(actions):
+        return None
+
     if _stops_before_it_acts(actions):
         # "Stop now, then retry tomorrow" is not a plan, it is two plans
         # disagreeing. A terminal action means the subject is finished, so
@@ -191,14 +220,57 @@ def propose_plan(
     return clamped
 
 
+def _retry_delays_hours(plan_obj: InterventionPlan, now: datetime) -> list[float]:
+    return [
+        (action.scheduled_at - now).total_seconds() / 3600
+        for action in plan_obj.actions
+        if action.type is ActionType.RETRY_CHARGE
+    ]
+
+
 def plan(
     event: FailureEvent,
     classification: Classification,
     client: LLMClient | None,
     now: datetime,
+    band: Band = Band.MID,
 ) -> InterventionPlan:
-    if client is not None:
-        proposed = propose_plan(event, classification, client, now)
-        if proposed is not None:
-            return proposed
-    return build_plan(event, classification, now)
+    """Use the model's plan only when it is at least as good as ours.
+
+    The deterministic planner is the floor, not merely the fallback. Validation
+    already established that a proposal is *permitted*; this asks whether it is
+    *better*, by scoring both schedules against the timing model and keeping
+    the stronger one.
+
+    That distinction was expensive to learn. A model plan can pass every safety
+    check and still lose money: asked to recover an issuer outage, this one
+    proposed retries a day, three days and five days out -- a reasonable
+    dunning cadence, and wrong, because an outage settles within hours and
+    those late attempts arrive after the decay has eaten them. Every action was
+    allowed. The sequence was worse than the one it replaced.
+
+    Scoring makes the model upside-only. When it finds something better than
+    the hand-written schedule it is used, and when it does not the hand-written
+    schedule stands.
+    """
+    fallback = build_plan(event, classification, now)
+    if client is None:
+        return fallback
+
+    proposed = propose_plan(event, classification, client, now)
+    if proposed is None:
+        return fallback
+
+    failure_class = classification.failure_class
+    def asks_for_instrument(plan_obj: InterventionPlan) -> bool:
+        return any(
+            a.type is ActionType.REQUEST_INSTRUMENT_UPDATE for a in plan_obj.actions
+        )
+
+    proposed_score = expected_recovery(
+        failure_class, band, _retry_delays_hours(proposed, now), asks_for_instrument(proposed)
+    )
+    fallback_score = expected_recovery(
+        failure_class, band, _retry_delays_hours(fallback, now), asks_for_instrument(fallback)
+    )
+    return proposed if proposed_score >= fallback_score else fallback

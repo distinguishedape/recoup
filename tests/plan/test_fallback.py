@@ -40,11 +40,12 @@ def test_every_class_gets_a_plan_that_respects_its_budget(failure_class):
     assert len(contacts) <= budget.contacts
 
 
-def test_insufficient_funds_notifies_then_retries_twice():
+def test_insufficient_funds_notifies_then_chases_the_pay_cycle():
     plan = build_plan(event(), classification(FailureClass.INSUFFICIENT_FUNDS), NOW)
     types = [a.type for a in plan.actions]
     assert types == [
         ActionType.SEND_MESSAGE,
+        ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
     ]
@@ -53,8 +54,11 @@ def test_insufficient_funds_notifies_then_retries_twice():
 def test_retries_are_spaced_out_in_time_not_stacked_on_the_same_instant():
     plan = build_plan(event(), classification(FailureClass.INSUFFICIENT_FUNDS), NOW)
     retries = [a for a in plan.actions if a.type is ActionType.RETRY_CHARGE]
+    # Spread wide and late: a shortfall resolves when wages arrive, so the
+    # probability is in the later attempts rather than the eager ones.
     assert retries[0].scheduled_at == NOW + timedelta(hours=24)
     assert retries[1].scheduled_at == NOW + timedelta(hours=72)
+    assert retries[2].scheduled_at == NOW + timedelta(hours=120)
 
 
 def test_instrument_invalid_asks_for_an_update_and_never_retries_the_dead_card():
@@ -74,13 +78,20 @@ def test_mandate_revoked_stops_immediately_and_contacts_nobody():
     assert plan.actions[0].tier is Tier.T4_TERMINAL
 
 
-def test_transient_issuer_retries_quickly_and_stays_silent():
+def test_transient_issuer_retries_sooner_than_the_baseline_and_stays_silent():
     plan = build_plan(event(), classification(FailureClass.TRANSIENT_ISSUER), NOW)
     assert [a.type for a in plan.actions] == [
         ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
+        ActionType.RETRY_CHARGE,
     ]
-    assert plan.actions[0].scheduled_at == NOW + timedelta(hours=6)
+    # Twelve hours, not six. Measured against the timing model, six was too
+    # eager: a good share of outages are still ongoing, so the attempt burns
+    # and the decay penalty lands on the next one. Still ahead of the
+    # baseline's flat daily ladder, and still without messaging anyone about
+    # a problem on the bank's side.
+    assert plan.actions[0].scheduled_at == NOW + timedelta(hours=12)
+    assert all(a.channel is None for a in plan.actions)
 
 
 def test_risk_decline_goes_to_a_human_rather_than_being_retried():
@@ -88,7 +99,7 @@ def test_risk_decline_goes_to_a_human_rather_than_being_retried():
     assert [a.type for a in plan.actions] == [ActionType.ESCALATE_MANUAL_REVIEW]
 
 
-def test_unclassified_gets_the_baseline_ladder_of_three_retries():
+def test_unclassified_gets_three_retries():
     plan = build_plan(event(), classification(FailureClass.UNCLASSIFIED), NOW)
     retries = [a for a in plan.actions if a.type is ActionType.RETRY_CHARGE]
     assert len(retries) == 3

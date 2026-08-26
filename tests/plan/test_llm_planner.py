@@ -85,7 +85,7 @@ def test_a_proposal_over_budget_is_rejected_so_the_fallback_is_used(tmp_path):
                     "template_id": None,
                     "reason": "again",
                 }
-                for h in (1, 2, 3, 4, 5)
+                for h in (1, 2, 3, 4, 5, 6)
             ]
         }
     )
@@ -191,6 +191,7 @@ def test_plan_falls_back_to_the_deterministic_planner_when_the_proposal_is_unusa
     result = plan(event(), classification(), client_returning("nope", tmp_path), NOW)
     assert [a.type for a in result.actions] == [
         ActionType.SEND_MESSAGE,
+        ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
     ]
@@ -335,4 +336,163 @@ def test_a_plan_of_only_a_stop_is_still_accepted(tmp_path):
         NOW,
     )
     assert result is not None
+    assert [a.type for a in result.actions] == [ActionType.STOP]
+
+
+def _schedule(*delays_hours):
+    return json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "retry_charge",
+                    "delay_hours": h,
+                    "tier": 1,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "retry",
+                }
+                for h in delays_hours
+            ]
+        }
+    )
+
+
+def test_a_plan_that_buries_the_remedy_behind_a_notice_is_rejected(tmp_path):
+    # The failure this closes, and it cost the whole class. When a card cannot
+    # be charged, asking for a different one is the only thing that recovers
+    # the payment. The model put a generic notice at tier one and the request
+    # at tier two, behind it. Every action was permitted and within budget.
+    # Whenever the notice fell outside the contact window the request never
+    # ran, and the cause recovered nobody at all: sixty-three recoveries to
+    # zero, on the same number of attempts.
+    buried = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "send_message",
+                    "delay_hours": 0,
+                    "tier": 1,
+                    "channel": "email",
+                    "template_id": "t1_notify_email",
+                    "reason": "let them know first",
+                },
+                {
+                    "type": "request_instrument_update",
+                    "delay_hours": 2,
+                    "tier": 2,
+                    "channel": "email",
+                    "template_id": "t2_update_instrument_email",
+                    "reason": "then ask for a new card",
+                },
+            ]
+        }
+    )
+    assert propose_plan(
+        event(),
+        classification(FailureClass.INSTRUMENT_INVALID),
+        client_returning(buried, tmp_path),
+        NOW,
+    ) is None
+
+
+def test_asking_for_the_new_card_first_is_accepted(tmp_path):
+    remedy_first = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "request_instrument_update",
+                    "delay_hours": 0,
+                    "tier": 2,
+                    "channel": "email",
+                    "template_id": "t2_update_instrument_email",
+                    "reason": "the card cannot be charged, so ask for another",
+                },
+                {
+                    "type": "send_message",
+                    "delay_hours": 48,
+                    "tier": 3,
+                    "channel": "email",
+                    "template_id": "t3_final_notice_email",
+                    "reason": "final notice",
+                },
+            ]
+        }
+    )
+    result = propose_plan(
+        event(),
+        classification(FailureClass.INSTRUMENT_INVALID),
+        client_returning(remedy_first, tmp_path),
+        NOW,
+    )
+    assert result is not None
+    assert result.actions[0].type is ActionType.REQUEST_INSTRUMENT_UPDATE
+
+
+def test_a_dead_card_plan_is_scored_on_the_remedy_not_on_retries(tmp_path):
+    # Scoring only retries made every plan for this cause tie at zero, so the
+    # comparison could not tell a working plan from a broken one.
+    from recoup.execute.probabilities import expected_recovery
+    from recoup.models.enums import Band
+
+    with_remedy = expected_recovery(FailureClass.INSTRUMENT_INVALID, Band.MID, [], True)
+    without = expected_recovery(FailureClass.INSTRUMENT_INVALID, Band.MID, [], False)
+    assert with_remedy > without
+    assert without == 0.0
+
+
+def test_a_better_schedule_is_adopted(tmp_path):
+    # Upside-only: when the model finds something stronger than the
+    # hand-written schedule, it is used.
+    from recoup.execute.probabilities import expected_recovery
+    from recoup.models.enums import Band
+    from recoup.plan.fallback import build_plan as deterministic
+
+    ours = deterministic(event(), classification(FailureClass.TRANSIENT_ISSUER), NOW)
+    our_delays = [
+        (a.scheduled_at - NOW).total_seconds() / 3600
+        for a in ours.actions
+        if a.type is ActionType.RETRY_CHARGE
+    ]
+    better = _schedule(18, 36, 72)
+    assert expected_recovery(
+        FailureClass.TRANSIENT_ISSUER, Band.MID, [18, 36, 72]
+    ) > expected_recovery(FailureClass.TRANSIENT_ISSUER, Band.MID, our_delays)
+
+    result = plan(
+        event(),
+        classification(FailureClass.TRANSIENT_ISSUER),
+        client_returning(better, tmp_path),
+        NOW,
+    )
+    delays = [
+        round((a.scheduled_at - NOW).total_seconds() / 3600)
+        for a in result.actions
+        if a.type is ActionType.RETRY_CHARGE
+    ]
+    assert delays == [18, 36, 72]
+
+
+def test_a_plan_with_no_retries_is_not_scored_out_of_existence(tmp_path):
+    # A revoked mandate recovers nothing by design, so both schedules score
+    # zero and the model's plan is kept rather than discarded on a tie.
+    only_stop = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "stop",
+                    "delay_hours": 0,
+                    "tier": 4,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "nothing to be done",
+                }
+            ]
+        }
+    )
+    result = plan(
+        event(),
+        classification(FailureClass.MANDATE_REVOKED),
+        client_returning(only_stop, tmp_path),
+        NOW,
+    )
     assert [a.type for a in result.actions] == [ActionType.STOP]

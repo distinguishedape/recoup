@@ -108,7 +108,7 @@ def test_an_escalation_action_flags_manual_review():
 
 
 def test_a_subject_with_both_budgets_spent_is_exhausted():
-    s = state(contacts_sent=1, charge_retries_used=2)
+    s = state(contacts_sent=1, charge_retries_used=3)
     assert is_exhausted(s) is True
 
 

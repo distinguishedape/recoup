@@ -140,7 +140,7 @@ def test_an_expired_promise_to_pay_suppresses_nothing():
 
 
 def test_a_charge_beyond_the_class_budget_is_denied():
-    ctx = context(failure_class=FailureClass.INSUFFICIENT_FUNDS, charge_retries_used=2)
+    ctx = context(failure_class=FailureClass.INSUFFICIENT_FUNDS, charge_retries_used=3)
     assert class_retry_budget(charge(at_ist(10)), ctx).allowed is False
 
 

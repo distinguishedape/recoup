@@ -1,5 +1,11 @@
 """Per-class attempt budgets (spec R3) -- the single source of truth.
 
+The budget exists to prevent *waste* -- attempts on causes that cannot
+succeed -- not to be thrifty on causes that can. An attempt costs a few rupees
+against a plan worth a few thousand, so capping a recoverable cause below what
+the baseline spends destroys value to save almost nothing. The classes that
+matter are the ones set to zero: those are the claim.
+
 These numbers are enforced twice on purpose. The planner clamps to them so
 that a plan is well-formed before anything acts on it, and the policy
 engine re-checks them at execution time so that a plan built by a model,
@@ -22,10 +28,10 @@ class Budget(BaseModel):
 
 
 BUDGETS: dict[FailureClass, Budget] = {
-    FailureClass.INSUFFICIENT_FUNDS: Budget(charge_retries=2, contacts=1),
+    FailureClass.INSUFFICIENT_FUNDS: Budget(charge_retries=3, contacts=1),
     FailureClass.INSTRUMENT_INVALID: Budget(charge_retries=0, contacts=2),
     FailureClass.MANDATE_REVOKED: Budget(charge_retries=0, contacts=0),
-    FailureClass.TRANSIENT_ISSUER: Budget(charge_retries=2, contacts=0),
+    FailureClass.TRANSIENT_ISSUER: Budget(charge_retries=3, contacts=0),
     FailureClass.RISK_DECLINE: Budget(charge_retries=0, contacts=0),
     FailureClass.UNCLASSIFIED: Budget(charge_retries=3, contacts=1),
 }

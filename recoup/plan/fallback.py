@@ -16,15 +16,25 @@ from recoup.models.core import Action, Classification, FailureEvent, Interventio
 from recoup.models.enums import ActionType, FailureClass, Tier
 from recoup.plan.budgets import action_id, clamp_to_budget
 
-FUNDS_RETRY_DELAYS_HOURS = (24, 72)
-"""Wait a day, then three days: payday and salary-credit cycles are the
-reason an insufficient-funds decline recovers at all."""
+FUNDS_RETRY_DELAYS_HOURS = (24, 72, 120)
+"""A shortfall resolves when wages arrive, so the schedule chases the pay
+cycle rather than the calendar. Spread wide and late, because that is where
+the probability actually is."""
 
-TRANSIENT_RETRY_DELAYS_HOURS = (6, 24)
-"""Issuer outages clear in hours, so there is no reason to wait a day."""
+TRANSIENT_RETRY_DELAYS_HOURS = (12, 24, 48)
+"""An outage either cleared or it did not, and most of that is settled within
+half a day.
 
-UNCLASSIFIED_RETRY_DELAYS_HOURS = (24, 48, 72)
-"""With no root cause to act on, fall back to the baseline ladder."""
+An earlier version retried at six hours on the reasoning that outages clear
+fast. Measured against the timing model, that was wrong: at six hours a good
+share of outages are still ongoing, so the attempt is burned and the decay
+penalty falls on the next one. The arm spent more attempts than the baseline
+and recovered fewer. Twelve hours is past the steep part of the curve and
+still well ahead of a one-size daily ladder."""
+
+UNCLASSIFIED_RETRY_DELAYS_HOURS = (24, 72, 120)
+"""No root cause to act on, so assume the commonest one and chase the pay
+cycle rather than retrying on a flat daily rhythm."""
 
 FINAL_NOTICE_DELAY_HOURS = 72
 

@@ -163,3 +163,36 @@ def retry_success_probability(
 
 def update_conversion_probability(band: Band) -> float:
     return BANDS[band].update_request_conversion
+
+
+def expected_recovery(
+    failure_class: FailureClass,
+    band: Band,
+    retry_delays_hours: list[float],
+    asks_for_new_instrument: bool = False,
+) -> float:
+    """Chance a schedule of retries recovers the payment at least once.
+
+    The point of scoring a schedule rather than counting its attempts is that
+    *when* the attempts fall decides most of the outcome, and counting cannot
+    see that. Two plans with three retries each are not equivalent: one placed
+    to catch a pay cycle and one placed on a flat daily rhythm differ by more
+    than the difference between two attempts and three.
+
+    Attempts are treated as independent given their timing, which is a
+    simplification -- a card that just declined is correlated with the same
+    card declining again -- but the decay factor already carries most of that
+    correlation, and the purpose here is to rank two schedules rather than to
+    predict a rate.
+    """
+    surviving = 1.0
+    for index, hours in enumerate(retry_delays_hours):
+        surviving *= 1.0 - retry_success_probability(failure_class, band, index, hours)
+    if asks_for_new_instrument:
+        # For a dead card this is the entire remedy, and a schedule of retries
+        # is worth nothing beside it. Scoring only retries made every plan for
+        # that cause tie at zero, so a comparison could not tell a working plan
+        # from a broken one.
+        converts = update_conversion_probability(band)
+        surviving *= 1.0 - converts * POST_UPDATE_CHARGE_SUCCESS
+    return 1.0 - surviving
