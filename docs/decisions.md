@@ -741,13 +741,98 @@ variables, while still importing cleanly so tests can collect the module without
 The `rules.py` docstring still described the old counter-based bound after the mechanism
 changed. Comments that describe code that no longer exists are worse than no comments.
 
+### D34. A live model exposed a defect that had survived the entire build
+
+**Problem.** Turning the model on made results dramatically worse: recovery rate fell
+13.8pp and `INSUFFICIENT_FUNDS` recoveries halved from 55 to 28. Classification was
+identical either way — 35 `UNCLASSIFIED` in both runs — so it was the planner.
+
+The plan *shapes* looked the same. The tiers did not. The model placed the notification at
+tier 1 and the two retries at **tier 2**.
+
+**Root cause, and it is mine.** The ladder rule is that a tier opens only once its
+predecessor has actually executed. That notification is frequently blocked by
+`contact_window`, because cohort failures spread across the clock. When it was blocked, tier
+2 never opened and **both retries died behind it**. `tier_not_open` blocks went from 19 to 80.
+
+The deeper error: **the escalation ladder governs contact intensity and I was applying it to
+charge retries as well.** Every tier in the design is defined by a channel — notify by email,
+request action by email and SMS, final notice by both, terminal by nothing. A charge retry has
+no channel and the customer never sees it. It was never on that scale.
+
+**Why nothing caught it.** The deterministic planner puts every action at tier 1, so the
+ladder and the plan could never disagree. 429 tests, a policy review that specifically
+attacked the gate, and a full experiment harness all passed over it. A planner that tiered
+differently — which the model did on its first real run — exposed it immediately.
+
+**Decision.** The ladder gates contact actions only. Charge attempts are bounded by the
+per-cause budget, which is what was always meant to bound them. The rule that a tier opens
+only once its predecessor ran is unchanged for everything the customer can see.
+
+**After the fix the model run and the deterministic run produce identical results.**
+
+**Cost if wrong.** A retry can now run at a tier whose contact never happened. That is the
+intended behaviour — a retry is not an escalation — but it is a real semantic change and it
+is stated here rather than buried.
+
+### D35. Two smaller things the model got wrong
+
+It proposed plans that **stop at hour zero and then retry the next day**. Every action was
+individually permissible, so the policy gate would have executed each one and the sequence
+would still have been nonsense. Permission and coherence are different properties and only
+one was being checked; incoherent plans are now rejected.
+
+Its retry spacing missed both timing windows — 24h/48h for an issuer outage that clears in
+hours. Fixed by putting the domain facts in the planner prompt rather than expecting the model
+to infer Indian payday cycles and bank outage durations unaided.
+
+### D36. Choosing a provider, and why a free model is defensible here
+
+The user supplied a Groq key. The client always took an injectable transport, so a provider
+was one function away; Groq, Google AI Studio, OpenRouter, Together and xAI now sit alongside
+Anthropic, auto-detected from whichever key is present, free tiers preferred.
+
+Two practical findings worth recording:
+
+- Groq answers urllib's default `Python-urllib/3.13` agent with **403 and Cloudflare error
+  1010**, which reads exactly like a bad key and is not one. Requests now carry a real user
+  agent.
+- Groq's model line-up had rotated; every Llama chat model I assumed was gone. Asking the API
+  for `/models` beats guessing, and `RECOUP_LLM_MODEL` overrides the default without a code
+  change.
+
+**The architectural point.** `gpt-oss-20b` returned non-JSON and fell back deterministically —
+the guardrail working on a weak model. The model's outputs are validated against closed
+vocabularies and a template allowlist before anything acts on them, so a weaker model degrades
+the *quality* of a suggestion and cannot widen what the system is *permitted* to do. Running
+this on a free tier is a decision the architecture already paid for.
+
+### D37. Replication replaces the single held-out run
+
+The held-out slice caught the money result not reproducing. Rather than leave that as prose in
+a README, it is now a feature: `--replicate` runs the whole sweep across several cohorts, and
+a finding replicates only if it survives the band sweep in **every** one. Surviving in three
+of four is reported as not replicating.
+
+Result on four cohorts: money survives in 1 of 4, efficiency in 4 of 4.
+
+The evidence bundle is committed rather than regenerated on trust, and the cached model
+responses reproduce the run **with no API key and no network** — verified with the key unset.
+
+### D38. I ignored the heredoc lesson a third time
+
+D12 recorded it, D28 recorded ignoring it. This environment collapses backslash escapes inside
+heredocs, so writing `"
+".join(...)` through one produced a literal newline inside a string
+and a syntax error. Twice in a row, in the same session, after documenting it twice.
+
+The habit that actually works: file-writing tools for anything containing escapes or prose, and
+heredocs only for plain commands.
+
 ### Still open
 
-- **The LLM path has never made a real call.** Every run used `--no-llm` because no
-  `ANTHROPIC_API_KEY` is present in this environment. The classifier's model branch, the
-  planner's model branch, and the response cache's reproducibility guarantee are all covered
-  by tests with injected transports, but none has been exercised against the actual model.
-  This is the largest remaining gap and it needs a key to close.
+- ~~The LLM path has never made a real call.~~ **Closed** — see D34-D36. It found a defect
+  that 429 tests had missed.
 - **The live Razorpay webhook has never been received.** Same reason: no test-mode
   credentials. The receiver is tested against a captured payload through FastAPI's client;
   the runbook covers the click-path from credentials to an ingested event.
