@@ -11,6 +11,7 @@ that case, which is a cheaper place to fail than anywhere downstream.
 """
 
 import os
+from pathlib import Path
 from typing import Mapping
 
 REQUIRED_KEYS = ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET")
@@ -49,8 +50,40 @@ class RazorpayConfig:
     __str__ = __repr__
 
 
+def load_dotenv(path: Path | None = None) -> dict[str, str]:
+    """Read ``.env`` into a plain dict, without touching the environment.
+
+    Deliberately tiny and dependency-free. The file holds secrets, so the
+    parsing rules are the boring ones: ``KEY=value`` per line, ``#`` comments
+    and blanks skipped, surrounding quotes stripped, and everything after the
+    first ``=`` kept verbatim because secrets contain ``=``.
+
+    Nothing is exported into ``os.environ``. A caller that wants these values
+    asks for them, which keeps a credential file from silently changing the
+    behaviour of unrelated code in the same process.
+    """
+    path = Path(path) if path else Path(".env")
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
 def load_config(env: Mapping[str, str] | None = None) -> RazorpayConfig:
-    source = os.environ if env is None else env
+    if env is None:
+        # Real environment first, so an explicitly exported value beats a stale
+        # line in a file somebody forgot about.
+        merged = dict(load_dotenv())
+        merged.update(os.environ)
+        source: Mapping[str, str] = merged
+    else:
+        source = env
     missing = [key for key in REQUIRED_KEYS if not source.get(key)]
     if missing:
         raise MissingCredentials(
