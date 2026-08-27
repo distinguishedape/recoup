@@ -96,6 +96,7 @@ class BandProbabilities(BaseModel):
 
     retry_success: dict[FailureClass, float]
     update_request_conversion: float
+    pay_now_conversion: float
 
 
 BANDS: dict[Band, BandProbabilities] = {
@@ -109,6 +110,7 @@ BANDS: dict[Band, BandProbabilities] = {
             FailureClass.UNCLASSIFIED: 0.20,
         },
         update_request_conversion=0.20,
+        pay_now_conversion=0.12,
     ),
     Band.MID: BandProbabilities(
         retry_success={
@@ -120,6 +122,7 @@ BANDS: dict[Band, BandProbabilities] = {
             FailureClass.UNCLASSIFIED: 0.30,
         },
         update_request_conversion=0.35,
+        pay_now_conversion=0.22,
     ),
     Band.HIGH: BandProbabilities(
         retry_success={
@@ -131,6 +134,7 @@ BANDS: dict[Band, BandProbabilities] = {
             FailureClass.UNCLASSIFIED: 0.40,
         },
         update_request_conversion=0.50,
+        pay_now_conversion=0.34,
     ),
 }
 
@@ -163,6 +167,18 @@ def retry_success_probability(
 
 def update_conversion_probability(band: Band) -> float:
     return BANDS[band].update_request_conversion
+
+
+def pay_now_conversion_probability(band: Band) -> float:
+    """How often a customer offered another way to pay actually pays.
+
+    Declared assumption, swept like every other one. Set below
+    ``update_request_conversion`` deliberately: a dead card is a *method*
+    problem and a new method solves it outright, whereas a shortfall is a
+    *money* problem and a different route to pay does not create funds. The
+    link helps the subset who have the money somewhere else, which is real but
+    smaller."""
+    return BANDS[band].pay_now_conversion
 
 
 def expected_recovery(

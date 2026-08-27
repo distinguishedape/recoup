@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from recoup.execute.probabilities import (
     POST_UPDATE_CHARGE_SUCCESS,
+    pay_now_conversion_probability,
     retry_success_probability,
     update_conversion_probability,
 )
@@ -154,6 +155,7 @@ def sample_decline(
 
 CHARGE_DRAWS = "charge"
 CONVERSION_DRAWS = "convert"
+PAY_NOW_DRAWS = "paynow"
 
 
 def subject_stream(
@@ -201,6 +203,7 @@ class SimSubject(BaseModel):
     first_failure_at: datetime
     attempts_made: int = 0
     instrument_updated: bool = False
+    paid_via_link: bool = False
     instrument_version: int = 0
     """Bumped each time the customer supplies a replacement. Zero means the
     original instrument, the one that already failed."""
@@ -210,6 +213,10 @@ class PaymentRail(Protocol):
     def charge(self, subscription_id: str, now: datetime) -> ChargeResult: ...
 
     def deliver_update_request(self, subscription_id: str, now: datetime) -> bool: ...
+
+    def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None: ...
+
+    def deliver_pay_now_link(self, subscription_id: str, now: datetime) -> bool: ...
 
 
 class SimulatedRail:
@@ -276,6 +283,23 @@ class SimulatedRail:
             subject.instrument_updated = True
             subject.instrument_version += 1
         return converted
+
+    def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
+        # `.invalid` is a reserved TLD that can never resolve, so a simulated
+        # link is impossible to mistake for a real one -- in a log, in a
+        # rendered message, or by a reader of the audit export.
+        return f"https://example.invalid/pay/{subscription_id}"
+
+    def deliver_pay_now_link(self, subscription_id: str, now: datetime) -> bool:
+        subject = self._subject(subscription_id)
+        if subject.paid_via_link:
+            return True
+        paid = self._stream(
+            subscription_id, PAY_NOW_DRAWS
+        ).random() < pay_now_conversion_probability(self._band)
+        if paid:
+            subject.paid_via_link = True
+        return paid
 
     def replacement_instrument_id(self, subscription_id: str) -> str | None:
         """Identity of the replacement instrument, or None if none was supplied.

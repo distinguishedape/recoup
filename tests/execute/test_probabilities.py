@@ -3,6 +3,7 @@ import pytest
 from recoup.execute.probabilities import (
     BANDS,
     POST_UPDATE_CHARGE_SUCCESS,
+    pay_now_conversion_probability,
     retry_success_probability,
     update_conversion_probability,
 )
@@ -131,3 +132,22 @@ def test_every_class_declares_a_timing_profile():
     from recoup.execute.probabilities import TIMING
 
     assert set(TIMING) == set(FailureClass)
+
+
+def test_pay_now_conversion_is_defined_at_every_band():
+    for band in Band:
+        rate = pay_now_conversion_probability(band)
+        assert 0.0 < rate < 1.0, band
+
+
+def test_pay_now_converts_worse_than_a_card_update():
+    # A dead card is a *method* problem and a new method fixes it. A shortfall
+    # is a *money* problem, and a different route to pay does not create funds.
+    for band in Band:
+        assert pay_now_conversion_probability(band) < update_conversion_probability(band), band
+
+
+def test_the_pay_now_bands_are_ordered():
+    assert (pay_now_conversion_probability(Band.LOW)
+            < pay_now_conversion_probability(Band.MID)
+            < pay_now_conversion_probability(Band.HIGH))

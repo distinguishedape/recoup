@@ -132,3 +132,46 @@ def test_an_unknown_subscription_is_a_loud_error_not_a_silent_decline():
     r = rail(subject(FailureClass.INSUFFICIENT_FUNDS))
     with pytest.raises(KeyError):
         r.charge("sub_does_not_exist", NOW)
+
+
+def test_a_pay_now_link_sometimes_converts_and_sometimes_does_not():
+    """Twenty fresh rails, because one seed proves nothing either way."""
+    outcomes = []
+    for seed in range(20):
+        s = subject(FailureClass.INSUFFICIENT_FUNDS, sub_id="sub_0000")
+        r = rail(s, seed=seed)
+        outcomes.append(r.deliver_pay_now_link("sub_0000", NOW))
+    assert any(outcomes), "no subject ever paid a link"
+    assert not all(outcomes), "every subject paid a link"
+
+
+def test_a_converted_pay_now_subject_stays_converted():
+    s = subject(FailureClass.INSUFFICIENT_FUNDS, sub_id="sub_0000")
+    r = rail(s, seed=3)
+    first = r.deliver_pay_now_link("sub_0000", NOW)
+    if first:
+        assert r.deliver_pay_now_link("sub_0000", NOW) is True
+
+
+def test_a_simulated_pay_now_link_can_never_be_mistaken_for_a_real_one():
+    s = subject(FailureClass.INSUFFICIENT_FUNDS, sub_id="sub_0000")
+    r = rail(s, seed=3)
+    url = r.create_pay_now_link("sub_0000", NOW)
+    assert ".invalid" in url
+
+
+def test_the_pay_now_draw_does_not_consume_the_charge_stream():
+    """Purpose-scoped streams: an earlier bug had one arm's conversion roll
+    consume the other arm's charge draw, silently unpairing the experiment.
+
+    Paired mode is what actually exercises purpose-scoping (unpaired mode
+    routes every draw through one shared stream regardless of purpose), so
+    this builds ``SimulatedRail`` directly with a ``paired_seed`` rather than
+    through the unpaired ``rail()`` helper above.
+    """
+    subjects_a = {"sub_0000": subject(FailureClass.INSUFFICIENT_FUNDS, sub_id="sub_0000")}
+    a = SimulatedRail(subjects_a, band=Band.MID, rng=random.Random(3), paired_seed=3)
+    subjects_b = {"sub_0000": subject(FailureClass.INSUFFICIENT_FUNDS, sub_id="sub_0000")}
+    b = SimulatedRail(subjects_b, band=Band.MID, rng=random.Random(3), paired_seed=3)
+    a.deliver_pay_now_link("sub_0000", NOW)
+    assert a.charge("sub_0000", NOW).succeeded == b.charge("sub_0000", NOW).succeeded
