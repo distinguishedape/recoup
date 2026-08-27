@@ -1,7 +1,7 @@
 import pytest
 
 from recoup.execute.messages import ALLOWED_TEMPLATE_IDS, TEMPLATES, render
-from recoup.models.enums import Tier
+from recoup.models.enums import ActionType, Tier
 
 CONTEXT = {"customer_id": "cust_1", "amount_inr": "999.00", "update_link": "https://x.test/u"}
 
@@ -70,3 +70,21 @@ def test_pay_now_templates_carry_the_link_placeholder():
 def test_pay_now_templates_are_tier_two_because_they_ask_for_action():
     for tid in ("t2_pay_now_email", "t2_pay_now_unclear_email"):
         assert TEMPLATES[tid].tier is Tier.T2_REQUEST_ACTION
+
+
+def test_each_template_declares_the_action_type_it_may_be_used_with():
+    # A pay-now template's body needs {pay_now_url}, which only the
+    # PAY_NOW_LINK branch of the executor supplies. A template rendered
+    # through the wrong action type crashes rather than sending a bad
+    # message, so the binding has to be checked before execution, not
+    # discovered by KeyError at render time.
+    expected = {
+        "t1_notify_email": ActionType.SEND_MESSAGE,
+        "t2_update_instrument_email": ActionType.REQUEST_INSTRUMENT_UPDATE,
+        "t2_update_instrument_sms": ActionType.REQUEST_INSTRUMENT_UPDATE,
+        "t3_final_notice_email": ActionType.SEND_MESSAGE,
+        "t3_final_notice_sms": ActionType.SEND_MESSAGE,
+        "t2_pay_now_email": ActionType.PAY_NOW_LINK,
+        "t2_pay_now_unclear_email": ActionType.PAY_NOW_LINK,
+    }
+    assert {tid: t.action_type for tid, t in TEMPLATES.items()} == expected

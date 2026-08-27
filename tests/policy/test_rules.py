@@ -144,6 +144,20 @@ def test_a_charge_needs_no_template():
     assert template_allowlist(charge(at_ist(10)), context()).allowed is True
 
 
+def test_a_pay_now_template_sent_as_a_plain_message_is_denied():
+    # t2_pay_now_email needs {pay_now_url} in its context, which only the
+    # PAY_NOW_LINK execution branch supplies. Sent as a plain SEND_MESSAGE it
+    # would crash at render time instead of being caught here.
+    action = message(at_ist(10), "t2_pay_now_email")
+    verdict = template_allowlist(action, context())
+    assert verdict.allowed is False
+    assert verdict.rule == "template_allowlist"
+
+
+def test_a_pay_now_link_using_the_pay_now_template_is_allowed():
+    assert template_allowlist(pay_now(), context()).allowed is True
+
+
 def test_a_live_promise_to_pay_suppresses_both_contact_and_charge():
     ctx = context(now=at_ist(10), promise_to_pay_until=at_ist(10) + timedelta(days=2))
     assert promise_to_pay_suppression(message(at_ist(10)), ctx).allowed is False

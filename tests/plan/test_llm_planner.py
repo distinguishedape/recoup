@@ -144,6 +144,28 @@ def test_a_proposal_over_budget_is_rejected_so_the_fallback_is_used(tmp_path):
     assert propose_plan(event(), classification(), client_returning(greedy, tmp_path), NOW) is None
 
 
+def test_a_proposal_pairing_a_pay_now_template_with_send_message_is_rejected(tmp_path):
+    # t2_pay_now_email needs {pay_now_url} in its render context, which only
+    # the PAY_NOW_LINK execution branch supplies. A model that names the
+    # right template but the wrong action type would otherwise pass
+    # validation and crash the executor instead of falling back.
+    mismatched = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "send_message",
+                    "delay_hours": 25,
+                    "tier": 2,
+                    "channel": "email",
+                    "template_id": "t2_pay_now_email",
+                    "reason": "offer a way to pay",
+                }
+            ]
+        }
+    )
+    assert propose_plan(event(), classification(), client_returning(mismatched, tmp_path), NOW) is None
+
+
 def test_a_proposal_naming_a_template_outside_the_allowlist_is_rejected(tmp_path):
     bad = json.dumps(
         {

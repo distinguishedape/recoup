@@ -27,7 +27,7 @@ from typing import Callable
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from recoup.execute.messages import ALLOWED_TEMPLATE_IDS
+from recoup.execute.messages import ALLOWED_TEMPLATE_IDS, TEMPLATES
 from recoup.models.core import Action, PolicyVerdict
 from recoup.models.enums import ActionType, FailureClass
 from recoup.plan.budgets import CONTACT_ACTION_TYPES, budget_for
@@ -171,6 +171,16 @@ def template_allowlist(action: Action, context: PolicyContext) -> PolicyVerdict:
         return _deny(rule, "a customer contact must name a template")
     if action.template_id not in ALLOWED_TEMPLATE_IDS:
         return _deny(rule, f"template {action.template_id!r} is not on the allowlist")
+    bound_type = TEMPLATES[action.template_id].action_type
+    if bound_type is not action.type:
+        # t2_pay_now_email needs {pay_now_url} in its render context, which
+        # only the PAY_NOW_LINK execution branch supplies. Naming the right
+        # template with the wrong action type would otherwise pass every
+        # other check here and crash the executor instead of being denied.
+        return _deny(
+            rule,
+            f"template {action.template_id!r} is for {bound_type.value}, not {action.type.value}",
+        )
     return _allow(rule, f"template {action.template_id!r} is allowed")
 
 

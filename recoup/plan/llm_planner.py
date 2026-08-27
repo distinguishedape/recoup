@@ -16,7 +16,7 @@ import json
 import re
 from datetime import datetime, timedelta
 
-from recoup.execute.messages import ALLOWED_TEMPLATE_IDS
+from recoup.execute.messages import ALLOWED_TEMPLATE_IDS, TEMPLATES
 from recoup.execute.probabilities import expected_recovery
 from recoup.llm.client import LLMClient, LLMUnavailable
 from recoup.models.core import Action, Classification, FailureEvent, InterventionPlan
@@ -107,6 +107,12 @@ def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) ->
     template_id = raw.get("template_id") or None
     channel = raw.get("channel") or None
     if template_id is not None and template_id not in ALLOWED_TEMPLATE_IDS:
+        return None
+    if template_id is not None and TEMPLATES[template_id].action_type is not action_type:
+        # t2_pay_now_email needs {pay_now_url}, which only the PAY_NOW_LINK
+        # execution branch supplies. Naming the right template with the
+        # wrong action type would otherwise pass validation and crash the
+        # executor instead of falling back to the deterministic planner.
         return None
     if action_type in {
         ActionType.SEND_MESSAGE,

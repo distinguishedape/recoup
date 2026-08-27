@@ -13,7 +13,7 @@ message, or vice versa.
 
 from pydantic import BaseModel, ConfigDict
 
-from recoup.models.enums import Tier
+from recoup.models.enums import ActionType, Tier
 
 
 class MessageTemplate(BaseModel):
@@ -24,6 +24,12 @@ class MessageTemplate(BaseModel):
     channel: str
     subject: str
     body: str
+    action_type: ActionType
+    """Which action type this template's placeholders are rendered for.
+    ``t2_pay_now_email`` needs ``{pay_now_url}`` in its context, which only
+    the ``PAY_NOW_LINK`` execution branch supplies -- naming the right
+    template with the wrong action type would otherwise pass every
+    allowlist check and then crash at render time instead of being denied."""
 
 
 class RenderedMessage(BaseModel):
@@ -40,6 +46,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t1_notify_email",
         tier=Tier.T1_NOTIFY,
         channel="email",
+        action_type=ActionType.SEND_MESSAGE,
         subject="We could not collect your subscription payment",
         body=(
             "Hello,\n\n"
@@ -53,6 +60,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t2_update_instrument_email",
         tier=Tier.T2_REQUEST_ACTION,
         channel="email",
+        action_type=ActionType.REQUEST_INSTRUMENT_UPDATE,
         subject="Please update your payment method",
         body=(
             "Hello,\n\n"
@@ -67,6 +75,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t2_update_instrument_sms",
         tier=Tier.T2_REQUEST_ACTION,
         channel="sms",
+        action_type=ActionType.REQUEST_INSTRUMENT_UPDATE,
         subject="",
         body=(
             "Your saved card can no longer be charged. Update your payment method to keep "
@@ -77,6 +86,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t3_final_notice_email",
         tier=Tier.T3_FINAL_NOTICE,
         channel="email",
+        action_type=ActionType.SEND_MESSAGE,
         subject="Final reminder about your subscription",
         body=(
             "Hello,\n\n"
@@ -91,6 +101,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t3_final_notice_sms",
         tier=Tier.T3_FINAL_NOTICE,
         channel="sms",
+        action_type=ActionType.SEND_MESSAGE,
         subject="",
         body=(
             "Last reminder: we could not collect Rs {amount_inr} for your subscription. "
@@ -101,6 +112,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t2_pay_now_email",
         tier=Tier.T2_REQUEST_ACTION,
         channel="email",
+        action_type=ActionType.PAY_NOW_LINK,
         subject="A quick way to settle your subscription payment",
         body=(
             "Hello,\n\n"
@@ -118,6 +130,7 @@ TEMPLATES: dict[str, MessageTemplate] = {
         template_id="t2_pay_now_unclear_email",
         tier=Tier.T2_REQUEST_ACTION,
         channel="email",
+        action_type=ActionType.PAY_NOW_LINK,
         subject="Your subscription payment did not go through",
         body=(
             "Hello,\n\n"
