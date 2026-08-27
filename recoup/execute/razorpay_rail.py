@@ -36,8 +36,13 @@ class SubscriptionResource(Protocol):
     def fetch(self, subscription_id: str) -> dict[str, Any]: ...
 
 
+class PlanResource(Protocol):
+    def fetch(self, plan_id: str) -> dict[str, Any]: ...
+
+
 class RazorpayClient(Protocol):
     subscription: SubscriptionResource
+    plan: PlanResource
 
 
 def build_client(config: RazorpayConfig) -> RazorpayClient:
@@ -93,17 +98,29 @@ class RazorpayTestRail:
         return bool(self.card_change_link(subscription_id))
 
     def _amount_for(self, subscription_id: str) -> int | None:
-        """The amount owed, read from the subscription entity itself.
+        """The amount owed, read via the subscription's plan.
 
-        Never guessed: a plan amount that cannot be found is ``None``, not a
+        A real Razorpay subscription entity carries no ``amount`` of its own
+        -- only a ``plan_id``. The amount lives on the plan
+        (``GET plans/{id}`` -> ``item.amount``), confirmed against the live
+        account. Never guessed: a missing ``plan_id``, a failed plan fetch,
+        or an absent ``item.amount`` all yield ``None`` rather than a
         stand-in figure that would let a link go out for the wrong sum.
         """
         entity = self.fetch_subscription(subscription_id)
-        amount = entity.get("amount")
-        if amount is None:
-            plan = entity.get("plan")
-            if isinstance(plan, dict):
-                amount = plan.get("amount")
+        plan_id = entity.get("plan_id")
+        if not plan_id:
+            return None
+        try:
+            plan = self._client.plan.fetch(str(plan_id))
+        except Exception:
+            return None
+        if not isinstance(plan, dict):
+            return None
+        item = plan.get("item")
+        if not isinstance(item, dict):
+            return None
+        amount = item.get("amount")
         if amount is None:
             return None
         try:
@@ -112,21 +129,28 @@ class RazorpayTestRail:
             return None
 
     def _customer_for(self, subscription_id: str) -> dict[str, str] | None:
-        """The customer contact, read from the subscription entity itself.
+        """The customer contact, read from the subscription entity's flat fields.
 
-        Never invented: a subscription with no email and no phone yields
-        ``None`` rather than a placeholder address nobody can receive mail at.
+        A real Razorpay subscription entity carries ``customer_email`` and
+        ``customer_contact`` directly at the top level -- there is no nested
+        ``customer`` object and no name field. Never invented: a subscription
+        with neither email nor contact yields ``None`` rather than a
+        placeholder address nobody can receive mail at, and the name is left
+        blank rather than fabricated when nothing better is available.
         """
         entity = self.fetch_subscription(subscription_id)
-        customer = entity.get("customer")
-        if not isinstance(customer, dict):
-            return None
-        email = str(customer.get("email") or "")
-        contact = str(customer.get("contact") or "")
+        email = str(entity.get("customer_email") or "")
+        contact = str(entity.get("customer_contact") or "")
         if not email and not contact:
             return None
+        notes = entity.get("notes")
+        name = ""
+        if isinstance(notes, dict):
+            name = str(notes.get("name") or notes.get("customer_name") or "")
+        if not name:
+            name = str(entity.get("customer_id") or "")
         return {
-            "name": str(customer.get("name") or ""),
+            "name": name,
             "email": email,
             "contact": contact,
         }

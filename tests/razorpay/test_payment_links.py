@@ -12,6 +12,33 @@ NOW = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
 
 CUSTOMER = {"name": "A", "email": "a@example.com", "contact": "+919876543210"}
 
+# The REAL shape, verified against the live account (this is the whole point
+# of these fixtures -- a fake that encodes the wrong shape tests the wrong
+# assumption, not the API). A subscription entity has no ``amount`` and no
+# nested ``customer``/``plan`` object: the amount lives on the plan resource
+# (``GET plans/{id}`` -> ``item.amount``) and the contact fields are flat
+# top-level keys (``customer_email``, ``customer_contact``).
+DEFAULT_PLAN_ID = "plan_1"
+DEFAULT_PLAN_AMOUNT = 99900
+
+
+def real_subscription(**overrides: object) -> dict:
+    entity = {
+        "id": "sub_1",
+        "status": "halted",
+        "plan_id": DEFAULT_PLAN_ID,
+        "customer_id": "cust_1",
+        "customer_email": CUSTOMER["email"],
+        "customer_contact": CUSTOMER["contact"],
+        "short_url": "https://rzp.io/i/TESTLINK",
+    }
+    entity.update(overrides)
+    return entity
+
+
+def real_plan(plan_id: str = DEFAULT_PLAN_ID, amount: int = DEFAULT_PLAN_AMOUNT) -> dict:
+    return {"id": plan_id, "item": {"amount": amount, "currency": "INR"}}
+
 
 # ---------------------------------------------------------------------------
 # Small, explicit fakes -- not mocks of the SDK.
@@ -28,31 +55,35 @@ class FakeSubscriptionResource:
         return self._entities[subscription_id]
 
 
-class FakeClient:
-    """Satisfies the ``RazorpayClient`` protocol: ``.subscription.fetch(id)``."""
+class FakePlanResource:
+    def __init__(self, plans: dict[str, dict]) -> None:
+        self._plans = plans
 
-    def __init__(self, entities: dict[str, dict]) -> None:
+    def fetch(self, plan_id: str) -> dict:
+        if plan_id not in self._plans:
+            raise KeyError(plan_id)
+        return self._plans[plan_id]
+
+
+class FakeClient:
+    """Satisfies the ``RazorpayClient`` protocol: ``.subscription.fetch(id)``
+    and ``.plan.fetch(id)``."""
+
+    def __init__(self, entities: dict[str, dict], plans: dict[str, dict] | None = None) -> None:
         self.subscription = FakeSubscriptionResource(entities)
+        self.plan = FakePlanResource(plans if plans is not None else {DEFAULT_PLAN_ID: real_plan()})
 
 
 def fake_client(**entities: dict) -> FakeClient:
-    """A client whose one subscription has an amount and a full contact."""
-    entities.setdefault(
-        "sub_1",
-        {
-            "id": "sub_1",
-            "status": "halted",
-            "amount": 99900,
-            "customer": dict(CUSTOMER),
-        },
-    )
+    """A client whose one subscription has a plan (amount) and a full contact."""
+    entities.setdefault("sub_1", real_subscription())
     return FakeClient(entities)
 
 
 def client_without_customer() -> FakeClient:
-    """A subscription entity with an amount but no email or phone at all."""
+    """A subscription entity with a plan but no email or phone at all."""
     return FakeClient(
-        {"sub_1": {"id": "sub_1", "status": "halted", "amount": 99900, "customer": {}}}
+        {"sub_1": real_subscription(customer_email="", customer_contact="")}
     )
 
 
@@ -204,9 +235,9 @@ def test_no_links_writer_means_no_link_is_attempted():
     assert rail.create_pay_now_link("sub_1", NOW) is None
 
 
-def test_a_missing_amount_is_never_guessed(tmp_path):
+def test_a_missing_plan_id_is_never_guessed(tmp_path):
     audit = AuditLog(tmp_path / "a.db")
-    client = FakeClient({"sub_1": {"id": "sub_1", "status": "halted", "customer": dict(CUSTOMER)}})
+    client = FakeClient({"sub_1": real_subscription(plan_id=None)})
     rail = RazorpayTestRail(client, CONFIG, links=fake_writer(), audit=audit)
     assert rail.create_pay_now_link("sub_1", NOW) is None
     records = [r for r in audit.reconstruct("sub_1") if r.stage == "pay_now_link_unavailable"]
@@ -217,7 +248,7 @@ def test_the_writer_sees_the_real_amount_and_reference():
     writer = fake_writer()
     rail = RazorpayTestRail(fake_client(), CONFIG, links=writer)
     rail.create_pay_now_link("sub_1", NOW)
-    assert writer.created[0]["amount_paise"] == 99900
+    assert writer.created[0]["amount_paise"] == DEFAULT_PLAN_AMOUNT
     assert writer.created[0]["reference_id"] == "sub_1"
     assert writer.created[0]["notify"] is False
 
@@ -226,3 +257,57 @@ def test_the_rail_still_refuses_to_be_built_on_a_live_config():
     live = RazorpayConfig(key_id="rzp_live_x", key_secret="s", webhook_secret="w")
     with pytest.raises(LiveModeRefused):
         RazorpayTestRail(fake_client(), live, links=fake_writer())
+
+
+# ---------------------------------------------------------------------------
+# The real subscription entity shape, verified against the live account:
+# no ``amount``, no nested ``customer``/``plan`` dict on the subscription
+# itself. Amount comes from the plan resource; contact fields are flat.
+# ---------------------------------------------------------------------------
+
+
+def test_the_amount_is_read_through_the_plan_not_the_subscription():
+    """A real subscription entity has no ``amount`` -- only a ``plan_id``.
+
+    The amount must be read via ``GET plans/{id}`` -> ``item.amount``, which
+    is what this asserts by using a plan amount that differs from anything
+    that might accidentally be present on the subscription fixture.
+    """
+    client = FakeClient(
+        {"sub_1": real_subscription(plan_id="plan_distinct")},
+        plans={"plan_distinct": real_plan("plan_distinct", amount=45000)},
+    )
+    writer = fake_writer()
+    rail = RazorpayTestRail(client, CONFIG, links=writer)
+    rail.create_pay_now_link("sub_1", NOW)
+    assert writer.created[0]["amount_paise"] == 45000
+
+
+def test_the_customer_contact_is_read_from_the_flat_subscription_fields():
+    """A real subscription entity has no nested ``customer`` object --
+    ``customer_email``/``customer_contact`` sit directly on the entity."""
+    client = FakeClient(
+        {
+            "sub_1": real_subscription(
+                customer_email="flat@example.com", customer_contact="+919876500000"
+            )
+        }
+    )
+    writer = fake_writer()
+    rail = RazorpayTestRail(client, CONFIG, links=writer)
+    rail.create_pay_now_link("sub_1", NOW)
+    customer = writer.created[0]["customer"]
+    assert customer["email"] == "flat@example.com"
+    assert customer["contact"] == "+919876500000"
+
+
+def test_a_plan_that_cannot_be_fetched_yields_no_link_and_no_guess(tmp_path):
+    """``plan_id`` present but the plan lookup fails (deleted plan, API
+    hiccup, wrong id) must not fall back to a guessed amount."""
+    audit = AuditLog(tmp_path / "a.db")
+    client = FakeClient({"sub_1": real_subscription(plan_id="plan_missing")}, plans={})
+    rail = RazorpayTestRail(client, CONFIG, links=fake_writer(), audit=audit)
+    assert rail.create_pay_now_link("sub_1", NOW) is None
+    records = [r for r in audit.reconstruct("sub_1") if r.stage == "pay_now_link_unavailable"]
+    assert records, "a failed plan fetch must still be recorded, not silently dropped"
+    assert records[0].payload["missing"] == "amount"
