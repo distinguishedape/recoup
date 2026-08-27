@@ -174,6 +174,37 @@ def template_allowlist(action: Action, context: PolicyContext) -> PolicyVerdict:
     return _allow(rule, f"template {action.template_id!r} is allowed")
 
 
+PAY_NOW_ELIGIBLE_CLASSES = frozenset(
+    {FailureClass.INSUFFICIENT_FUNDS, FailureClass.UNCLASSIFIED}
+)
+"""The only causes for which offering another way to pay is the right answer.
+
+A pay-now link says "the money is not in that account today, but you may have
+it elsewhere". That is true of a shortfall, and it is the least harmful guess
+when the cause is unknown. It is false everywhere else, and sending it anyway
+would make this a fixed ladder rather than a cause-matched intervention:
+
+* ``INSTRUMENT_INVALID`` needs a *card change* link, which is a different link
+  to a different page and already exists.
+* ``TRANSIENT_ISSUER`` resolves itself within hours. Contacting the customer
+  costs a message and buys nothing.
+* ``RISK_DECLINE`` is a bank's decision about the transaction. Offering a
+  second route around it is precisely what a risk block exists to prevent.
+* ``MANDATE_REVOKED`` is a withdrawal of consent."""
+
+
+def pay_now_link_causes(action: Action, context: PolicyContext) -> PolicyVerdict:
+    rule = "pay_now_link_causes"
+    if action.type is not ActionType.PAY_NOW_LINK:
+        return _allow(rule, "not a pay-now link")
+    if context.failure_class in PAY_NOW_ELIGIBLE_CLASSES:
+        return _allow(rule, f"{context.failure_class.value} may be offered another way to pay")
+    return _deny(
+        rule,
+        f"{context.failure_class.value} is not a cause an alternative payment route answers",
+    )
+
+
 def promise_to_pay_suppression(action: Action, context: PolicyContext) -> PolicyVerdict:
     rule = "promise_to_pay_suppression"
     if action.type in TERMINAL_ACTION_TYPES:
@@ -230,6 +261,7 @@ RULES: tuple[RuleFn, ...] = (
     opt_out_stop,
     promise_to_pay_suppression,
     class_retry_budget,
+    pay_now_link_causes,
     template_allowlist,
     contact_window,
     contact_rate_limit,

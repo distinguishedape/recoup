@@ -9,6 +9,7 @@ from recoup.policy.rules import (
     contact_rate_limit,
     contact_window,
     opt_out_stop,
+    pay_now_link_causes,
     promise_to_pay_suppression,
     template_allowlist,
 )
@@ -41,6 +42,20 @@ def charge(scheduled_at: datetime) -> Action:
         tier=Tier.T1_NOTIFY,
         channel=None,
         template_id=None,
+        free_text=None,
+        reason="test",
+    )
+
+
+def pay_now(scheduled_at: datetime = at_ist(10)) -> Action:
+    return Action(
+        action_id="act_3",
+        subscription_id="sub_1",
+        type=ActionType.PAY_NOW_LINK,
+        scheduled_at=scheduled_at,
+        tier=Tier.T2_REQUEST_ACTION,
+        channel="email",
+        template_id="t2_pay_now_email",
         free_text=None,
         reason="test",
     )
@@ -315,3 +330,72 @@ def test_rescheduling_is_bounded_by_a_declared_cap():
     from recoup.policy.rules import MAX_RESCHEDULES
 
     assert 1 <= MAX_RESCHEDULES <= 5
+
+
+def test_a_shortfall_may_be_offered_a_pay_now_link():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.INSUFFICIENT_FUNDS))
+    assert verdict.allowed
+
+
+def test_an_unknown_cause_may_be_offered_a_pay_now_link():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.UNCLASSIFIED))
+    assert verdict.allowed
+
+
+def test_a_revoked_mandate_is_never_offered_a_pay_now_link():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.MANDATE_REVOKED))
+    assert not verdict.allowed
+    assert verdict.rule == "pay_now_link_causes"
+
+
+def test_a_risk_decline_is_never_offered_another_route_to_pay():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.RISK_DECLINE))
+    assert not verdict.allowed
+
+
+def test_a_dead_card_gets_a_card_change_link_not_a_pay_now_link():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.INSTRUMENT_INVALID))
+    assert not verdict.allowed
+
+
+def test_an_issuer_outage_is_not_worth_bothering_the_customer_about():
+    verdict = pay_now_link_causes(pay_now(), context(failure_class=FailureClass.TRANSIENT_ISSUER))
+    assert not verdict.allowed
+
+
+def test_the_rule_ignores_every_other_action_type():
+    other_actions = {
+        ActionType.RETRY_CHARGE: charge(at_ist(10)),
+        ActionType.SEND_MESSAGE: message(at_ist(10)),
+        ActionType.REQUEST_INSTRUMENT_UPDATE: Action(
+            action_id="act_4",
+            subscription_id="sub_1",
+            type=ActionType.REQUEST_INSTRUMENT_UPDATE,
+            scheduled_at=at_ist(10),
+            tier=Tier.T2_REQUEST_ACTION,
+            channel="email",
+            template_id="t2_update_instrument_email",
+            free_text=None,
+            reason="test",
+        ),
+        ActionType.STOP: Action(
+            action_id="act_5",
+            subscription_id="sub_1",
+            type=ActionType.STOP,
+            scheduled_at=at_ist(10),
+            tier=Tier.T4_TERMINAL,
+            channel=None,
+            template_id=None,
+            free_text=None,
+            reason="test",
+        ),
+    }
+    for action_type, act in other_actions.items():
+        verdict = pay_now_link_causes(act, context(failure_class=FailureClass.MANDATE_REVOKED))
+        assert verdict.allowed, action_type
+
+
+def test_the_rule_is_wired_into_the_engine():
+    from recoup.policy.rules import RULES
+
+    assert pay_now_link_causes in RULES
