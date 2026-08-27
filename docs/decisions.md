@@ -1308,13 +1308,19 @@ applies to — before Task 9 re-measures its effect. If the link turns out not t
 that will show up as a bad number honestly attributed to a deliberate design choice, not as a
 budget quietly adjusted to make one look better.
 
-**Known follow-up, out of this task's scope.** Making the planner actually able to produce a
-`PAY_NOW_LINK` action surfaced four failures elsewhere in the suite that Task 6 was scoped not
-to fix (`recoup/execute/`, `recoup/policy/`, `recoup/live/`, and their tests, were explicitly
-off-limits): two `tests/live/test_agent.py` doubles (`FakeRail`, `RefusingRail`) do not
-implement `create_pay_now_link` / `deliver_pay_now_link` and raise `AttributeError` the first
-time a live-agent scenario schedules one; `tests/policy/test_rules.py::test_a_contact_beyond_
-the_class_budget_is_denied` and `tests/escalate/test_ladder.py::test_a_subject_with_both_
-budgets_spent_is_exhausted` both hardcode the old `contacts=1` ceiling for
-`INSUFFICIENT_FUNDS`. All four are the budget widening reaching fixtures that assumed the old
-number, not a defect in the widening itself, and need a fix in files this task did not touch.
+**Stale scaffolding, not a production defect.** Making the planner actually able to produce a
+`PAY_NOW_LINK` action surfaced four failures elsewhere in the suite. None was a bug in
+production code; each was test scaffolding written against the world before this change, of two
+kinds. Two live-agent test doubles (`FakeRail`, `RefusingRail` in `tests/live/test_agent.py`)
+predated `PaymentRail` gaining `create_pay_now_link`/`deliver_pay_now_link` in Task 4 — nothing
+had called it through a live-agent scenario until `INSUFFICIENT_FUNDS` plans started actually
+scheduling one, so the missing method only now raises `AttributeError`. Both doubles gained it,
+returning an `https://example.invalid/...` link, matching `SimulatedRail`'s convention that a
+fake link must never be mistakable for a real one. Two more tests
+(`tests/policy/test_rules.py::test_a_contact_beyond_the_class_budget_is_denied`,
+`tests/escalate/test_ladder.py::test_a_subject_with_both_budgets_spent_is_exhausted`) hardcoded
+the old `contacts=1` ceiling as a magic number where their intent was "at/beyond the budget" —
+both now derive the figure from `budget_for(...)` so a future budget change cannot silently
+invert what the fixture means again. The assertions themselves (`is_exhausted(...) is True`,
+`.allowed is False`) were not loosened; only the fixture inputs were corrected to still mean
+what the test names say.

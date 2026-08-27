@@ -10,6 +10,7 @@ from recoup.escalate.ladder import (
 )
 from recoup.models.core import Action
 from recoup.models.enums import ActionType, FailureClass, TerminalState, Tier
+from recoup.plan.budgets import budget_for
 
 NOW = datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc)
 
@@ -108,7 +109,11 @@ def test_an_escalation_action_flags_manual_review():
 
 
 def test_a_subject_with_both_budgets_spent_is_exhausted():
-    s = state(contacts_sent=1, charge_retries_used=3)
+    # "Both budgets spent" means at the ceiling, not any particular number --
+    # derive it from the budget itself so a future budget change cannot make
+    # this fixture mean "still has room" without the test noticing.
+    budget = budget_for(FailureClass.INSUFFICIENT_FUNDS)
+    s = state(contacts_sent=budget.contacts, charge_retries_used=budget.charge_retries)
     assert is_exhausted(s) is True
 
 

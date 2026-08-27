@@ -49,9 +49,24 @@ class FakeRail:
     def deliver_update_request(self, subscription_id: str, now: datetime) -> bool:
         return self.converts
 
+    def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
+        # `.invalid` is a reserved TLD that can never resolve, matching
+        # SimulatedRail's convention -- a fake link can never be mistaken for
+        # a real one, in a log, a rendered message, or an audit export.
+        return f"https://example.invalid/pay/{subscription_id}"
+
+    def deliver_pay_now_link(self, subscription_id: str, now: datetime) -> bool:
+        return self.converts
+
 
 class RefusingRail(FakeRail):
-    """Stands in for the real Razorpay rail, which cannot manually retry (F2)."""
+    """Stands in for the real Razorpay rail, which cannot manually retry (F2).
+
+    A manual retry is unsupported, not link creation: Razorpay's payment
+    links are a separate API this rail has no reason to refuse, so
+    ``create_pay_now_link`` and ``deliver_pay_now_link`` are inherited from
+    ``FakeRail`` unchanged -- only ``charge`` is overridden to raise.
+    """
 
     def charge(self, subscription_id: str, now: datetime) -> ChargeResult:
         raise ManualRetryUnsupported("Razorpay exposes no manual-retry API")

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from recoup.models.core import Action
 from recoup.models.enums import ActionType, FailureClass, Tier
+from recoup.plan.budgets import budget_for
 from recoup.policy.rules import (
     IST,
     PolicyContext,
@@ -160,7 +161,11 @@ def test_a_charge_beyond_the_class_budget_is_denied():
 
 
 def test_a_contact_beyond_the_class_budget_is_denied():
-    ctx = context(failure_class=FailureClass.INSUFFICIENT_FUNDS, contacts_sent=1)
+    # "Beyond the budget" means fully spent, not any particular number -- derive
+    # it from the budget itself so a future budget change cannot make this
+    # fixture mean "still within budget" without the test noticing.
+    at_budget = budget_for(FailureClass.INSUFFICIENT_FUNDS).contacts
+    ctx = context(failure_class=FailureClass.INSUFFICIENT_FUNDS, contacts_sent=at_budget)
     assert class_retry_budget(message(at_ist(10)), ctx).allowed is False
 
 
