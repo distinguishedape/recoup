@@ -914,12 +914,175 @@ The scorer also had to value the instrument-update remedy. Scoring only retries 
 plan for a dead card tie at zero, so the comparison could not tell a working plan from a
 broken one.
 
+## Phase 11 — The spec audit, and what a live account actually returns
+
+An audit against the spec's own primary metric table found **all five missing**. The work
+below closed that gap. It was done *after* measuring the shortfall, which is the sequence a
+sceptic should weigh; two of the four items are plain bug fixes, and one of those was
+silently losing money.
+
+### D43. The contact window was cancelling messages, not deferring them
+
+**Problem.** A `contact_window` denial ended the action. In a 2,000-subject run the rule
+blocked **872 contacts and discarded every one**.
+
+The rule exists so nobody is messaged at three in the morning. Dropping the message instead
+of moving it turns a rule about *when* into a rule about *whether* — a different and far more
+expensive policy than the one anybody agreed to, and one that loses recovery while looking
+like restraint. It had passed every test, because the tests asserted the denial, which was
+correct; nothing asserted what happened next.
+
+**Decision.** `next_permitted_contact_time` returns the next moment inside 08:00–19:00 IST,
+and a blocked contact goes back on the clock at that time. It re-enters through the **full**
+policy gate — a reschedule is a new attempt, not a bypass — and only `contact_window` earns
+one, because a budget denial or an opt-out means the action should not happen at all. Bounded
+at `MAX_RESCHEDULES = 3`, since an action that keeps colliding with the window is being
+blocked by something other than the hour and should stop rather than orbit the clock.
+
+### D44. The efficiency metrics counted every action, not charges
+
+Fixing D43 made two metrics look **worse**, which was the clue. Both are defined on *charge*
+attempts, and both were summing `actions_executed` — every action, messages included. So
+recovering 872 lost contacts registered as a regression on two targets while earning money on
+three.
+
+`SubjectOutcome` gained `charge_attempts` as a separate counter. Wasted attempts went from
+438 to **2** — the true figure all along. A metric named for one thing and computed from
+another is worse than no metric, because it is trusted.
+
+### D45. Free text is substituted, not rejected
+
+`template_allowlist` denied any action carrying `free_text`, which killed the whole plan and
+threw away the model's schedule along with its prose.
+
+The plan is now kept and the approved template substituted, with the model's copy preserved
+in `Action.suppressed_free_text` — audit-only, never dispatched, and a test asserts the string
+`suppressed_free_text` does not appear anywhere in `executor.py`. A reviewer can see that the
+model wanted to send *"FINAL WARNING: legal action will follow"*, see that it could not, and
+see what went instead. That is more useful than discarding the plan and more honest than
+pretending nothing was proposed.
+
+### D46. Two report sections the spec asked for and the renderer omitted
+
+Money per failure cause, and money per escalation tier. The first is the uncomfortable one:
+
+| Cause | Baseline | Recoup |
+|---|---|---|
+| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,43,884** |
+| `UNCLASSIFIED` | ₹2,83,368 | **₹6,17,708** |
+| `TRANSIENT_ISSUER` | **₹5,34,742** | ₹4,61,274 |
+| `INSUFFICIENT_FUNDS` | **₹10,05,017** | ₹7,95,618 |
+
+Recoup wins where knowing the cause changes the action and **loses on the two causes an
+ordinary ladder already handles**. The net is strongly positive and it is not a clean sweep.
+The report now says so without needing anyone to point it out.
+
+**Result:** gross +15.4%, net +15.7%, recovery rate +7.2pp, attempts per recovery −40.9%,
+wasted attempts −99.9%. All five replicate in 4/4 cohorts.
+
+### D47. The live webhook path never ran the pipeline
+
+`_default_app()` builds `create_app(config, audit)` and `sink` defaults to `None`. So against
+real Razorpay the agent verified the signature, parsed, mapped, deduped, wrote one `ingest`
+record — and stopped. It never classified, planned, gated or executed.
+
+Every claim about the agent rests on the simulation harness; the live path was a
+signature-verifying receiver sitting next to it. The two halves were never joined. Recorded
+here rather than fixed silently, because "we have a live integration" was doing more work in
+the README than the code supported.
+
+### D48. The real rail can fetch by id, so it cannot detect
+
+`RazorpayTestRail` is careful and deliberately narrow — `charge()` raises rather than return a
+plausible number, so simulated outcomes cannot enter through a path labelled real. But every
+method is **fetch-by-known-id**, and the `RazorpayClient` Protocol exposes only
+`subscription.fetch`. No `.all()`, no `order`, no `invoice`, no `payment`.
+
+An id only arrives because a webhook handed it over, so the client is downstream-of-
+notification by construction. That is the code-level reason the system cannot *detect*
+revenue at risk, only be told about it. A read-only probe confirmed `GET /v1/orders`,
+`/v1/invoices` and `/v1/subscriptions` all answer 200 on the test account and carry the
+status, `attempts` and `due_by` fields a scanner would need — including an abandoned order
+with `attempts=0` sitting in the account right now.
+
+### D49. Four real declines, one indistinguishable string
+
+Every failed payment in the live test account:
+
+```
+pay_TUSchJ2f00m441   payment_failed   gateway   payment_authorization   "Payment failed"
+pay_TUQM5FRUyYm2ov   payment_failed   gateway   payment_authorization   "Payment failed"
+pay_TUQF4WxWt8SUAa   payment_failed   gateway   payment_authorization   "Payment failed"
+pay_TUQDnWX1ew7MHw   payment_failed   gateway   payment_authorization   "Payment failed"
+```
+
+Different cards, different scenarios, byte-identical error fields. `payment_failed` is in
+`AMBIGUOUS_REASONS`, so the table correctly refuses to guess and the resolver infers
+`TRANSIENT_ISSUER` at 0.80 from `source` and `step` alone — plausible, and unverifiable,
+because in test mode there is no real cause underneath. Without a model configured it
+degrades to `UNCLASSIFIED` at 0.30 rather than inventing one.
+
+### D50. Spike finding F1 was too strong
+
+F1 says test mode cannot inject decline reasons, and calls that "the single fact that
+determines the architecture." D49 looks like confirmation. It is not the whole picture:
+Razorpay publishes **error-scenario test cards** that produce eight distinct error codes —
+`insufficient_fund`, `card_disabled_for_online_payments`, `card_number_invalid`,
+`gateway_technical_error`, `card_declined`, `authentication_failed`, `payment_timed_out`,
+`payment_cancelled` — provided failure is selected on the mock bank page.
+
+Those reach five of the six classes, and `card_declined` is ambiguous, so the LLM resolver
+can be exercised on a **real** decline. F1 holds for subscription auto-debit driven from the
+Dashboard control; it does not hold for the order checkout path this project actually uses.
+The correction matters because F1 is the finding the whole architecture is justified by.
+
+One thing to verify before trusting it: Razorpay's test-card table says `insufficient_fund`
+**singular** while its error-code reference says `insufficient_funds` **plural**, and the
+taxonomy maps the plural. If the singular is what arrives, the highest-volume class falls
+through to `UNCLASSIFIED` at 0.40 — the exact failure the taxonomy exists to prevent. The API
+should settle it, not the docs, and not me.
+
+### D51. The classifier was never measured, and it turns out to work
+
+An earlier note here claimed the cohort could not exercise the classifier, on the grounds that
+it emitted one perfectly separable reason string per cause. That was **stale** — the generator
+already draws from the 25-string `REASON_MIX`, ambiguous strings included. Nobody had checked.
+
+Measured over 2,000 cohort events against known latent truth:
+
+| | Overall | Ambiguous-reason subset (n=310) |
+|---|---|---|
+| Table only | 84.5% | 0% |
+| Table + LLM | **99.4%** | **96.1%** |
+
+The 0% is correct behaviour, not failure: with no model the table refuses to guess and routes
+ambiguity to `UNCLASSIFIED` at 0.30 confidence. The LLM's contribution is the whole of that
+gap — +14.9 points overall, and 310 cases the deterministic path cannot decide by
+construction. This is the number that justifies a model being in the architecture at all.
+
+**The residual 0.6% is irreducible, and the reason is in our own generator.** All 12 misses
+are `RISK_DECLINE` read as `TRANSIENT_ISSUER`, because `_AMBIGUOUS_SOURCE_STEP` assigns both
+classes `("gateway", "payment_authorization")`. On an ambiguous string the two are
+byte-identical, so no classifier can separate them. 99 risk-decline subjects times the 0.12
+`card_declined` weight is 12, exactly the miss count. 99.4% is the ceiling and the model is
+sitting on it.
+
+**Decision: leave the generator alone.** Making `RISK_DECLINE` carry `source: internal` is
+defensible on real Razorpay semantics and would take accuracy to roughly 100%. It is also
+precisely the D40 pattern — changing the measurement after seeing what it cost — for a gain of
+0.6%. A ceiling that can be derived from two lines of the generator is better evidence than a
+perfect score obtained by making the test easier.
+
 ### Still open
 
-- **The cohort cannot exercise the classifier.** It emits six reason strings, one per cause,
-  each perfectly separable, so accuracy is 500/500 by construction. The taxonomy now knows 32
-  strings, and every real Razorpay decline observed was *ambiguous* — the case the cohort
-  never generates. Until this is fixed, "the classifier works" is untested.
+- **The classifier's accuracy has no home in the repo** (D51). It measures 99.4%, but only in
+  a scratch script — there is no test asserting it and no report section publishing it, so the
+  claim is unevidenced where it counts.
+- **No real Razorpay decline has ever reached the classifier as anything but ambiguous.** The
+  error-scenario cards in D50 are the way to fix that with real data.
+- **The live path does not run the agent** (D47). One argument would join the halves.
+- **Detection does not exist** (D48). Three list queries would open all three risk surfaces
+  the track's problem statement names.
 - **Contact fatigue is unpriced.** The scoreboard gives no value to not harassing customers,
   which is the entire thing the compliance machinery buys.
 - **Cost constants remain declared assumptions.** Real Razorpay pricing would be the single

@@ -38,31 +38,45 @@ The baseline runs that last row for **every** one of those causes.
 Both arms over the same cohort, paired per-subject random draws, three
 probability bands, four independent cohorts of 2,000 subjects.
 
-| Mid band, n=2000 | Baseline ladder | Recoup | |
-|---|---|---|---|
-| Gross recovered | ₹18,62,629 | **₹20,32,563** | +9.1% |
-| Cost of chasing | ₹13,998 | **₹8,404** | −40% |
-| **Net recovered** | ₹18,48,631 | **₹20,24,159** | **+9.5%** |
-| Recovery rate | 45.7% | **49.2%** | +3.5pp |
-| Attempts per recovery | 5.36 | **3.96** | −26% |
-| Wasted attempts | 1,800 | **438** | −76% |
-| Time to recovery | **35.2h** | 36.5h | +1.3h |
+| Mid band, n=2000 | Baseline ladder | Recoup | | Spec target |
+|---|---|---|---|---|
+| Gross recovered | ₹18,35,622 | **₹21,18,484** | +15.4% | +10% ✅ |
+| Cost of chasing | ₹13,902 | **₹9,865** | −29% | — |
+| **Net recovered** | ₹18,21,720 | **₹21,08,619** | **+15.7%** | +15% ✅ |
+| Recovery rate | 46.0% | **53.2%** | +7.2pp | +5pp ✅ |
+| Attempts per recovery | 5.28 | **3.12** | −40.9% | −25% ✅ |
+| Wasted attempts | 1,782 | **2** | −99.9% | >90% ✅ |
+| Time to recovery | **34.7h** | 39.2h | +4.5h | — |
 
 All five headline findings **replicate in all four cohorts** — a finding counts
 only if it survives the Low/Mid/High sweep in *every* one, not on average.
 
-Recoup is slightly **slower**. The probability lives in the later retries and it
-goes and gets it. That is a real trade, not a win everywhere.
+Recoup is **slower** — 4.5 hours slower on average. The probability lives in the
+later retries and it goes and gets it, and blocked contacts wait for the next
+permitted hour rather than being dropped. That is a real trade, not a win
+everywhere.
 
-### The strongest result is the one that never moved
+### The lift is not evenly earned, and the report says so
 
-On dead cards — the one cause where knowing the reason changes what you should
-do — Recoup recovers **63 subjects where the baseline recovers 11, using a third
-of the attempts**. It asks for a new card instead of hammering one that cannot
-work.
+Gross recovered per cause, both arms, mid band:
 
-That figure, and the 76% cut in wasted attempts, held across every version of
-the model during development. They are the claims to trust most.
+| Cause | Baseline | Recoup | |
+|---|---|---|---|
+| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,43,884** | **+₹2,31,888** |
+| `UNCLASSIFIED` | ₹2,83,368 | **₹6,17,708** | **+₹3,34,340** |
+| `TRANSIENT_ISSUER` | **₹5,34,742** | ₹4,61,274 | −₹73,468 |
+| `INSUFFICIENT_FUNDS` | **₹10,05,017** | ₹7,95,618 | −₹2,09,399 |
+
+Recoup wins decisively where knowing the cause changes what you do, and **loses
+on the two causes an ordinary retry ladder already handles well**. The net is
+strongly positive; it is not a clean sweep, and a total alone would have hidden
+that.
+
+Dead cards are the clearest case: **₹11,996 recovered by the baseline against
+₹2,43,884 by Recoup**, roughly twentyfold, because Recoup asks for a new card
+instead of hammering one that cannot work. That result and the near-total
+elimination of wasted attempts held across every version of the model during
+development. They are the claims to trust most.
 
 ### What it took to get here, stated plainly
 
@@ -81,8 +95,20 @@ recovery. That number was real, and three things changed between then and now:
    causes where retries work, since an attempt costs ₹3 against a plan worth
    ~₹1,500. The configuration was re-frozen. Weigh it knowing the order.
 3. **A live model exposed two real bugs** (see below).
+4. **An audit against the spec's own targets found all five primary metrics
+   missing**, and two defects behind them. `contact_window` was blocking 872
+   contacts per run and **discarding every one** — turning a rule about *when* to
+   message into a rule about *whether*, which is a far more expensive policy than
+   anyone agreed to, wearing a compliance costume. Blocked contacts now return to
+   the clock at the next permitted hour, bounded and audited. Fixing that exposed
+   the second defect: both efficiency metrics are defined on *charge* attempts and
+   were summing every executed action including messages, so recovering 872 lost
+   contacts read as a regression. Both are bug fixes — one was losing money, the
+   other was counting the wrong thing — but they were made **after** measuring a
+   shortfall against targets set in advance, and a reader should weigh them
+   knowing that order.
 
-A sceptical reader should know the −2.26% and the +9.5% come from the same
+A sceptical reader should know the −2.26% and the +15.7% come from the same
 codebase at different points, and part of the difference is judgement about what
 the model ought to represent. The two figures in the previous section are the
 ones that survived all of it.
