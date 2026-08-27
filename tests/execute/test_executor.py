@@ -60,6 +60,68 @@ def authorized(action_obj: Action):
     return result
 
 
+def pay_now_action():
+    return action(ActionType.PAY_NOW_LINK, "t2_pay_now_email", "email")
+
+
+def render_context():
+    return dict(CONTEXT)
+
+
+class ConfigurablePayNowRail:
+    """A rail double for pay-now tests: link creation and conversion are each
+    configurable directly, independent of SimulatedRail's probability model."""
+
+    def __init__(self, link_url: str | None, converts: bool) -> None:
+        self._link_url = link_url
+        self._converts = converts
+
+    def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
+        return self._link_url
+
+    def deliver_pay_now_link(self, subscription_id: str, now: datetime) -> bool:
+        return self._converts
+
+
+class ConfigurableDispatcher:
+    """Like SimulatedDispatcher, but whether delivery succeeds is configurable."""
+
+    def __init__(self, delivers: bool = True) -> None:
+        self.sent: list[tuple[str, str, object]] = []
+        self._delivers = delivers
+
+    def send(self, subscription_id, channel, message, now):
+        self.sent.append((subscription_id, channel, message))
+        return self._delivers
+
+
+@pytest.fixture()
+def executor_with(tmp_path):
+    """Factory fixture: build an Executor wired to configurable pay-now fakes.
+
+    ``converts`` controls whether the rail reports the pay-now link as paid.
+    ``delivers`` controls whether the dispatcher reports the message as sent.
+    ``link_url`` controls what the rail hands back when asked to create a link.
+    """
+    logs: list[AuditLog] = []
+
+    def _make(
+        converts: bool = True,
+        delivers: bool = True,
+        link_url: str | None = "https://example.invalid/pay/sub_1",
+    ):
+        rail = ConfigurablePayNowRail(link_url=link_url, converts=converts)
+        dispatcher = ConfigurableDispatcher(delivers=delivers)
+        audit = AuditLog(tmp_path / f"audit_{len(logs)}.db")
+        logs.append(audit)
+        clock = VirtualClock(NOW)
+        return Executor(rail, dispatcher, audit, clock), rail, dispatcher
+
+    yield _make
+    for log in logs:
+        log.close()
+
+
 @pytest.fixture()
 def harness(tmp_path):
     reason, source, step = canonical_decline(FailureClass.INSUFFICIENT_FUNDS)
@@ -174,3 +236,33 @@ def test_cost_of_agrees_with_what_execution_actually_charges():
         CHANNEL_COST_PAISE["sms"]
     )
     assert cost_of(action(ActionType.STOP)) == 0
+
+
+def test_a_pay_now_link_is_sent_and_its_outcome_recorded(executor_with):
+    executor, rail, dispatcher = executor_with(converts=True)
+    result = executor.execute(authorized(pay_now_action()), render_context())
+    assert result.succeeded is True
+    assert "paid" in result.detail.lower()
+
+
+def test_a_pay_now_link_that_is_not_paid_is_not_a_failure_to_send(executor_with):
+    executor, rail, dispatcher = executor_with(converts=False)
+    result = executor.execute(authorized(pay_now_action()), render_context())
+    assert result.succeeded is False
+    assert dispatcher.sent, "the message should still have gone out"
+
+
+def test_an_undeliverable_pay_now_link_never_counts_as_paid(executor_with):
+    """No transport means no link reached anyone, so conversion is impossible."""
+    executor, rail, dispatcher = executor_with(converts=True, delivers=False)
+    result = executor.execute(authorized(pay_now_action()), render_context())
+    assert result.succeeded is False
+    assert "not delivered" in result.detail
+
+
+def test_an_action_with_no_link_available_is_not_reported_as_sent(executor_with):
+    executor, rail, dispatcher = executor_with(link_url=None)
+    result = executor.execute(authorized(pay_now_action()), render_context())
+    assert result.succeeded is False
+    assert "no pay-now link" in result.detail
+    assert not dispatcher.sent, "nothing should be sent without a link in it"

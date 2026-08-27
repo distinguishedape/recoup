@@ -158,6 +158,27 @@ class Executor:
                 return True, "customer updated their payment instrument"
             return False, "update request delivered, instrument not yet updated"
 
+        if action.type is ActionType.PAY_NOW_LINK:
+            # Create first: the message body contains the URL, so rendering
+            # before the link exists would always emit a placeholder.
+            url = self._rail.create_pay_now_link(action.subscription_id, now)
+            if not url:
+                return False, "no pay-now link could be created"
+            message = render(
+                action.template_id or "", {**render_context, "pay_now_url": url}
+            )
+            delivered = self._dispatcher.send(
+                action.subscription_id, action.channel or "", message, now
+            )
+            if not delivered:
+                # Same reasoning as the instrument-update branch: a customer
+                # cannot pay a link that never reached them.
+                return False, f"pay-now link {action.template_id} was not delivered"
+            paid = self._rail.deliver_pay_now_link(action.subscription_id, now)
+            if paid:
+                return True, "customer paid via the pay-now link"
+            return False, "pay-now link delivered, not yet paid"
+
         if action.type is ActionType.SEND_MESSAGE:
             message = render(action.template_id or "", render_context)
             delivered = self._dispatcher.send(
