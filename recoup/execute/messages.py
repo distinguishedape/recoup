@@ -97,6 +97,37 @@ TEMPLATES: dict[str, MessageTemplate] = {
             "Update your payment method here to continue: {update_link} (ref {customer_id})"
         ),
     ),
+    "t2_pay_now_email": MessageTemplate(
+        template_id="t2_pay_now_email",
+        tier=Tier.T2_REQUEST_ACTION,
+        channel="email",
+        subject="A quick way to settle your subscription payment",
+        body=(
+            "Hello,\n\n"
+            "We could not collect Rs {amount_inr} from your saved payment method, "
+            "which usually means the funds were not available in that account at the "
+            "time.\n\n"
+            "If it is easier to pay from somewhere else, you can do that here:\n"
+            "{pay_now_url}\n\n"
+            "If you would rather leave it, we will try the saved method again "
+            "automatically.\n\n"
+            "Reference: {customer_id}\n"
+        ),
+    ),
+    "t2_pay_now_unclear_email": MessageTemplate(
+        template_id="t2_pay_now_unclear_email",
+        tier=Tier.T2_REQUEST_ACTION,
+        channel="email",
+        subject="Your subscription payment did not go through",
+        body=(
+            "Hello,\n\n"
+            "We could not collect Rs {amount_inr} for your subscription and the reason "
+            "was not clear from your bank.\n\n"
+            "You can settle it directly here if you would like to:\n"
+            "{pay_now_url}\n\n"
+            "Reference: {customer_id}\n"
+        ),
+    ),
 }
 
 ALLOWED_TEMPLATE_IDS: frozenset[str] = frozenset(TEMPLATES)

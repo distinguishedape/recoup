@@ -111,3 +111,9 @@ def test_a_zero_budget_class_loses_every_charge_and_contact():
         actions=[act(0, ActionType.RETRY_CHARGE), act(1, ActionType.SEND_MESSAGE)],
     )
     assert clamp_to_budget(plan).actions == []
+
+
+def test_a_pay_now_link_counts_as_a_customer_contact():
+    from recoup.plan.budgets import CONTACT_ACTION_TYPES
+
+    assert ActionType.PAY_NOW_LINK in CONTACT_ACTION_TYPES

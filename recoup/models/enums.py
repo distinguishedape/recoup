@@ -43,6 +43,7 @@ class ActionType(str, Enum):
     RETRY_CHARGE = "retry_charge"
     REQUEST_INSTRUMENT_UPDATE = "request_instrument_update"
     SEND_MESSAGE = "send_message"
+    PAY_NOW_LINK = "pay_now_link"
     STOP = "stop"
     ESCALATE_MANUAL_REVIEW = "escalate_manual_review"
 

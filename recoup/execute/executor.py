@@ -43,7 +43,11 @@ def render_context_for(subscription: Subscription) -> dict[str, str]:
 def cost_of(action: Action) -> int:
     if action.type is ActionType.RETRY_CHARGE:
         return CHARGE_ATTEMPT_COST_PAISE
-    if action.type in {ActionType.SEND_MESSAGE, ActionType.REQUEST_INSTRUMENT_UPDATE}:
+    if action.type in {
+        ActionType.SEND_MESSAGE,
+        ActionType.REQUEST_INSTRUMENT_UPDATE,
+        ActionType.PAY_NOW_LINK,
+    }:
         return CHANNEL_COST_PAISE.get(action.channel or "", 0)
     return 0
 

@@ -55,3 +55,18 @@ def test_no_template_promises_anything_about_a_customers_account_status():
         lowered = template.body.lower()
         assert "guarantee" not in lowered
         assert "legal action" not in lowered
+
+
+def test_pay_now_templates_are_on_the_allowlist():
+    assert "t2_pay_now_email" in ALLOWED_TEMPLATE_IDS
+    assert "t2_pay_now_unclear_email" in ALLOWED_TEMPLATE_IDS
+
+
+def test_pay_now_templates_carry_the_link_placeholder():
+    for tid in ("t2_pay_now_email", "t2_pay_now_unclear_email"):
+        assert "{pay_now_url}" in TEMPLATES[tid].body, tid
+
+
+def test_pay_now_templates_are_tier_two_because_they_ask_for_action():
+    for tid in ("t2_pay_now_email", "t2_pay_now_unclear_email"):
+        assert TEMPLATES[tid].tier is Tier.T2_REQUEST_ACTION

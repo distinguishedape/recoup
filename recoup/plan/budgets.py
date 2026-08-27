@@ -37,7 +37,7 @@ BUDGETS: dict[FailureClass, Budget] = {
 }
 
 CONTACT_ACTION_TYPES: frozenset[ActionType] = frozenset(
-    {ActionType.SEND_MESSAGE, ActionType.REQUEST_INSTRUMENT_UPDATE}
+    {ActionType.SEND_MESSAGE, ActionType.REQUEST_INSTRUMENT_UPDATE, ActionType.PAY_NOW_LINK}
 )
 
 
