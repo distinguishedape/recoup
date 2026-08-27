@@ -38,8 +38,8 @@ from recoup.models.core import Action, Subscription
 from recoup.models.enums import ActionType, Band, FailureClass, TerminalState, Tier
 from recoup.plan.budgets import CONTACT_ACTION_TYPES
 from recoup.plan.llm_planner import plan as build_intervention_plan
-from recoup.policy.engine import authorize
-from recoup.policy.rules import MAX_RESCHEDULES, PolicyContext, next_permitted_contact_time
+from recoup.policy.gate import Block, Reschedule, block_payload, gate, reschedule_payload
+from recoup.policy.rules import PolicyContext
 
 POST_UPDATE_CHARGE_DELAY_HOURS = 1
 """Once a customer updates their instrument, charge shortly afterwards --
@@ -232,54 +232,38 @@ def run_recoup_arm(
             replacement_instrument_id=rail.replacement_instrument_id(sub_id),
             charged_instrument_ids=frozenset(state.charged_instrument_ids),
         )
-        authorized, verdict = authorize(action, context)
+        # The gate decision is shared with the live agent rather than written
+        # twice, because a policy that differs between the measurement and
+        # production is worse than no policy. See recoup/policy/gate.py.
+        decision = gate(action, context, state.reschedules.get(action.action_id, 0))
 
-        if authorized is None and verdict.rule == "contact_window":
-            # A timing rule is answered by a different time. Discarding the
-            # action would turn "not at 3am" into "not at all", which is a
-            # different policy and an expensive one: this rule alone blocked
-            # 872 contacts in a 2,000-subject run, and every one was lost.
-            moved_already = state.reschedules.get(action.action_id, 0)
-            if moved_already < MAX_RESCHEDULES:
-                state.reschedules[action.action_id] = moved_already + 1
-                when = next_permitted_contact_time(now)
-                audit.append(
-                    new_record(
-                        sub_id,
-                        now,
-                        "contact_rescheduled",
-                        {
-                            "action_id": action.action_id,
-                            "action_type": action.type.value,
-                            "rule": verdict.rule,
-                            "detail": verdict.detail,
-                            "original_time": now.isoformat(),
-                            "rescheduled_to": when.isoformat(),
-                            "attempt": moved_already + 1,
-                        },
-                    )
-                )
-                clock.schedule(when, action.model_copy(update={"scheduled_at": when}))
-                continue
-
-        if authorized is None:
-            blocked_count[sub_id] += 1
+        if isinstance(decision, Reschedule):
+            state.reschedules[action.action_id] = decision.attempt
             audit.append(
                 new_record(
                     sub_id,
                     now,
-                    "policy_block",
-                    {
-                        "action_id": action.action_id,
-                        "action_type": action.type.value,
-                        "rule": verdict.rule,
-                        "detail": verdict.detail,
-                    },
+                    "contact_rescheduled",
+                    reschedule_payload(action, decision, now),
+                )
+            )
+            clock.schedule(
+                decision.when, action.model_copy(update={"scheduled_at": decision.when})
+            )
+            continue
+
+        if isinstance(decision, Block):
+            blocked_count[sub_id] += 1
+            audit.append(
+                new_record(
+                    sub_id, now, "policy_block", block_payload(action, decision.verdict)
                 )
             )
             continue
 
-        result = executor.execute(authorized, render_context_for(subscriptions[sub_id]))
+        result = executor.execute(
+            decision.authorized, render_context_for(subscriptions[sub_id])
+        )
         executed_count[sub_id] += 1
         if action.type is ActionType.RETRY_CHARGE:
             charges[sub_id] += 1

@@ -15,6 +15,7 @@ request gets a 400, because those *should* stop.
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -123,12 +124,29 @@ def _default_app() -> FastAPI:
 
     Built from the environment for the runbook's one-liner. Tests always call
     ``create_app`` directly with explicit dependencies.
+
+    The sink is the whole point. Without one this endpoint verifies a signature,
+    writes an ingest record and stops -- which is what it did for the entire
+    first half of this project while the README described an agent.
     """
     from pathlib import Path
 
+    from recoup.execute.razorpay_rail import RazorpayTestRail, build_client
+    from recoup.live.agent import LiveAgent
+    from recoup.llm.client import LLMClient
+    from recoup.razorpay.config import load_dotenv
+
+    for key, value in load_dotenv().items():
+        os.environ.setdefault(key, value)
+
     config = load_config()
     audit = AuditLog(Path("artifacts/audit.db"), Path("artifacts/audit.jsonl"))
-    return create_app(config, audit)
+    agent = LiveAgent(
+        audit=audit,
+        rail=RazorpayTestRail(build_client(config), config),
+        llm_client=LLMClient(cache_path=Path("artifacts/llm_cache.json")),
+    )
+    return create_app(config, audit, sink=agent.handle)
 
 
 class _MisconfiguredApp:

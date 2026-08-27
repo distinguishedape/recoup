@@ -139,7 +139,16 @@ class Executor:
 
         if action.type is ActionType.REQUEST_INSTRUMENT_UPDATE:
             message = render(action.template_id or "", render_context)
-            self._dispatcher.send(action.subscription_id, action.channel or "", message, now)
+            delivered = self._dispatcher.send(
+                action.subscription_id, action.channel or "", message, now
+            )
+            if not delivered:
+                # The return value used to be discarded here. In simulation the
+                # dispatcher always succeeds so it never showed; against a live
+                # transport it meant a customer could be recorded as having
+                # updated their card in response to a message that was never
+                # sent. You cannot convert on a request that did not arrive.
+                return False, f"update request {action.template_id} was not delivered"
             converted = self._rail.deliver_update_request(action.subscription_id, now)
             if converted:
                 return True, "customer updated their payment instrument"
