@@ -101,6 +101,17 @@ def test_a_recovered_subject_records_when_it_recovered(audit):
             assert outcome.recovered_at is None
 
 
+def test_a_recovered_subject_is_attributed_to_retry(audit):
+    # The baseline has no payment link and never will -- everything it
+    # recovers, it recovers by retrying the same instrument.
+    result = run_control_arm(config(cohort_size=200, seed=3), audit)
+    recovered = [o for o in result.outcomes if o.terminal is TerminalState.RECOVERED]
+    assert recovered
+    assert all(o.recovered_via == "retry" for o in recovered)
+    unrecovered = [o for o in result.outcomes if o.terminal is not TerminalState.RECOVERED]
+    assert all(o.recovered_via is None for o in unrecovered)
+
+
 def test_every_subject_records_its_own_first_failure(audit):
     result = run_control_arm(config(cohort_size=40), audit)
     assert all(o.first_failure_at is not None for o in result.outcomes)

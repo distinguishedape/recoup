@@ -108,3 +108,9 @@ def test_the_report_shows_how_far_up_the_ladder_recoveries_happened(sweep):
     report = render_report(sweep)
     assert "How far up the ladder" in report
     assert "T1 notify" in report
+
+
+def test_the_report_shows_what_actually_earned_the_money(sweep):
+    report = render_report(sweep)
+    assert "What actually earned the money" in report
+    assert "`retry`" in report

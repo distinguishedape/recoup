@@ -144,6 +144,27 @@ def render_report(sweep: SweepResult, replication: ReplicationResult | None = No
         )
     lines.append("")
 
+    lines.append("## What actually earned the money")
+    lines.append("")
+    lines.append(
+        "Gross recovered by the mechanism that produced it, mid band. A total lift is "
+        "easy to take on trust; this is the table that says how much of it the pay-now "
+        "link is responsible for, rather than the retry ladder underneath it. The "
+        "baseline has no payment link and never will, so its money is entirely "
+        "`retry`."
+    )
+    lines.append("")
+    lines.append("| Mechanism | Baseline | Recoup |")
+    lines.append("|---|---|---|")
+    mechanisms = sorted(set(mid.control.money_by_mechanism) | set(mid.treatment.money_by_mechanism))
+    for mechanism in mechanisms:
+        lines.append(
+            f"| `{mechanism}` "
+            f"| {format_rupees(mid.control.money_by_mechanism.get(mechanism, 0))} "
+            f"| {format_rupees(mid.treatment.money_by_mechanism.get(mechanism, 0))} |"
+        )
+    lines.append("")
+
     lines.append("## Findings across the sensitivity sweep")
     lines.append("")
     lines.append("| Finding | Low | Mid | High | Verdict | Note |")

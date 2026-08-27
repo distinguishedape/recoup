@@ -127,6 +127,9 @@ def run_control_arm(config: RunConfig, audit: AuditLog) -> RunResult:
                 recovered_at=recovered_at.get(sub_id),
                 # The baseline has no ladder. Everything it does is one tier.
                 recovered_at_tier=1 if sub_id in recovered_at else None,
+                # The baseline has no payment link and never will -- every
+                # recovery it earns, it earns by retrying the same instrument.
+                recovered_via="retry" if sub_id in recovered_at else None,
             )
         )
 

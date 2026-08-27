@@ -8,7 +8,7 @@ START = datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc)
 
 
 def outcome(sub_id, terminal, failure_class=FailureClass.INSUFFICIENT_FUNDS,
-            gross=0, cost=0, executed=0, hours=None, charges=None) -> SubjectOutcome:
+            gross=0, cost=0, executed=0, hours=None, charges=None, via=None) -> SubjectOutcome:
     # `executed` counts every action; `charges` counts only charge attempts,
     # which is what the spec's efficiency metrics are defined on. Defaulting
     # charges to executed keeps the charge-only fixtures readable.
@@ -23,6 +23,7 @@ def outcome(sub_id, terminal, failure_class=FailureClass.INSUFFICIENT_FUNDS,
         actions_blocked=0,
         first_failure_at=START,
         recovered_at=START + timedelta(hours=hours) if hours is not None else None,
+        recovered_via=via,
     )
 
 
@@ -205,3 +206,28 @@ def test_the_class_breakdown_sums_to_the_total():
         outcome("b", TerminalState.RECOVERED, FailureClass.TRANSIENT_ISSUER, gross=49900, hours=1),
     ), "t")
     assert sum(m.money_by_class.values()) == m.gross_recovered_paise
+
+
+def test_money_is_broken_down_by_the_mechanism_that_earned_it():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=99900, hours=1, via="retry"),
+        outcome("b", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=49900, hours=1, via="pay_now_link"),
+    ), "treatment")
+    assert m.money_by_mechanism["retry"] == 99900
+    assert m.money_by_mechanism["pay_now_link"] == 49900
+
+
+def test_an_unrecovered_subject_contributes_nothing_to_the_mechanism_breakdown():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.UNRECOVERED, FailureClass.INSUFFICIENT_FUNDS),
+    ), "treatment")
+    assert sum(m.money_by_mechanism.values()) == 0
+
+
+def test_the_mechanism_breakdown_sums_to_the_total():
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=99900, hours=1, via="retry"),
+        outcome("b", TerminalState.RECOVERED, FailureClass.INSTRUMENT_INVALID, gross=49900, hours=1, via="instrument_update"),
+        outcome("c", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=29900, hours=1, via="pay_now_link"),
+    ), "t")
+    assert sum(m.money_by_mechanism.values()) == m.gross_recovered_paise
