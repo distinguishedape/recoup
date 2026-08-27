@@ -1324,3 +1324,128 @@ both now derive the figure from `budget_for(...)` so a future budget change cann
 invert what the fixture means again. The assertions themselves (`is_exhausted(...) is True`,
 `.allowed is False`) were not loosened; only the fixture inputs were corrected to still mean
 what the test names say.
+
+### D60. The net-recovery shortfall is **closed by R-A** — and the link is credited more than it added
+
+**The verdict, in the words Task 9 requires: closed by R-A.** Net recovered was +14.0%
+against a +15% target. On the held-out run it is **+26.8%** (mid band, seed 3, cohort
+2,000, configuration hash `7aa7962cac907ba0`, replicated over seeds 11, 29 and 47).
+
+| Mid band, n=2000 | Baseline ladder | Recoup before R-A | Recoup with R-A |
+|---|---|---|---|
+| Gross recovered | ₹18,35,622 | ₹20,85,999 | **₹23,18,879** |
+| Cost of chasing | ₹13,902 | ₹9,362.10 | **₹8,795.30** |
+| Net recovered | ₹18,21,720 | ₹20,76,636.90 | **₹23,10,083.70** |
+| Net lift vs baseline | — | +14.0% ✗ | **+26.8% ✅** |
+| Recovery rate | 46.0% | 52.4% | **58.7%** |
+| Attempts per recovery | 5.28 | 3.00 | **2.46** |
+| Mean time to recovery | 34.7h | 39.4h | **34.4h** |
+
+The two Recoup columns come from the same seed, the same cohort and the same
+configuration hash; the control arm is byte-identical between the two runs, so this is a
+paired before/after and not two experiments compared by eye.
+
+The target is cleared under the project's own strict rule, not only at the headline.
+Net lift clears +15% in **all twelve cells** — three bands × four cohorts — and the worst
+cell is **+21.6%** (seed 47, Low band). The five headline findings all survive Low/Mid/High
+and replicate in 4/4 cohorts.
+
+**Nothing was adjusted after seeing this number.** No budget, delay or probability was
+touched between the run and this entry. The one budget change in this plan
+(`INSUFFICIENT_FUNDS` and `UNCLASSIFIED` contacts 1 → 2) was made in [[D59]] *before*
+anything was re-run and for a structural reason — the new action needs room to fit — which
+is the opposite of the D40 sequence this log already discloses once.
+
+**The link is credited more money than it added.** The mechanism table credits
+`pay_now_link` with **₹3,25,341** at the mid band. But the two classes the link is
+permitted for gained only **₹1,87,405** between the two runs:
+
+| Band | Link credited | Gained by the two eligible classes | Credited but not added |
+|---|---|---|---|
+| Low | ₹2,14,896 | ₹1,47,928 | 31% |
+| Mid | ₹3,25,341 | ₹1,87,405 | 42% |
+| High | ₹4,89,762 | ₹2,56,378 | 48% |
+
+Credit is assigned to whichever mechanism actually collected the payment, so a subject the
+link converts on day two is credited to the link even when a later retry would have
+collected the same rupees on day four. Roughly **two-fifths of the link's headline figure
+is money the ladder would have earned anyway**, and the share rises with the band because
+optimistic retry probabilities give the ladder more to have collected. The honest reading
+is that the link earns real money *and* pulls forward money that already existed — which is
+also why mean time to recovery fell five hours.
+
+**₹45,475 of the improvement is not the link at all.** Dead cards gained ₹2,11,399 →
+₹2,56,874, and `pay_now_link` is refused for `INSTRUMENT_INVALID` at the policy gate. The
+cause is in the audit trail: the planner prompt gained a restriction sentence in [[D59]],
+which changed every plan prompt hash and so re-asked the model for every class. Of 409 dead
+cards, 71 now get a *second* `request_instrument_update` where before 23 got a single action
+and the rest a generic follow-up notice; only the request carries a conversion probability,
+so the second one converts and the notice never could. **+25 recoveries.** It is a real
+improvement, and it belongs to the model rather than to R-A.
+
+**The model's money contribution, re-measured, still does not replicate.** Running the same
+four cohorts with `--no-llm` and differencing the net lift:
+
+```
+mean effect on net lift : +₹13,230   (was +₹7,753 before R-A)
+spread                  : −₹13,651 to +₹33,436
+positive in             : 3 of 4 cohorts  →  does not replicate
+```
+
+Its dead-card contribution does clear the bar: **positive in all twelve cells**, +₹8,994 to
++₹79,463, mid-band median around +₹49,000. The model earns its place by finding dead cards
+and asking for a new instrument; its effect on the total remains a mean that one cohort
+contradicts, and is reported as not replicating rather than as a number that happens to be
+positive.
+
+**Recoup is no longer slower.** The trade this README disclosed for most of the project —
+Recoup recovering more but 4.7 hours later — is gone: 39.4h → 34.4h, now 0.3h *faster* than
+the baseline. Offering another way to pay one hour after the first retry collects from
+customers who would otherwise have waited for the day-three retry.
+
+**What it costs if this is wrong.** The link's conversion rate (12%/22%/34%) is a declared
+assumption like every other probability here, now printed in the report's Assumptions table
+alongside the instrument-update conversion it was previously missing from. Link *creation*
+is real against the Razorpay API; link *payment* is simulated, and the live rail's
+`deliver_pay_now_link` returns `False` rather than inventing a conversion. If the true
+conversion is materially below the Low band, the shortfall reopens — and the sweep is the
+place a reader should check that, not the headline.
+
+### D61. The "reproduce with no API key" path had been broken since the provider changed
+
+Found while re-checking a claim rather than writing a feature, which is the only reason it
+was found at all: the README has said for weeks that copying `evidence/llm_cache.json` into
+an output directory replays the experiment offline, "verified with the key unset". Running
+it with every provider key unset produced:
+
+```
+refusing to write the bundle: 34536 prompts reached neither the cache nor a model
+```
+
+**The cause.** A cache key is `sha256(model | system | user | max_tokens)`. The model name is
+in there deliberately — two models answering the same prompt are not interchangeable results.
+But `LLMClient` resolved the model as *"whatever the detected provider's default is, or
+`DEFAULT_MODEL` if no provider was detected"*, and `DEFAULT_MODEL` is Anthropic's
+`claude-sonnet-5`. So a keyless run asked its questions as a different model than the one that
+filled the cache, every key missed, and the documented path could not work. The claim was
+true when written — the cache was Anthropic-filled then — and was silently invalidated by
+moving the project to Groq's free tier ([[D36]]). Nothing failed; the guarantee just stopped
+being true, which is the failure mode a "verified" note is supposed to prevent.
+
+**The fix.** `RECOUP_LLM_MODEL` is now honoured even when no provider key is present, so the
+replaying run can name the model that filled the cache. One line, one test
+(`test_a_pinned_model_name_survives_having_no_provider_key`), and both READMEs now print the
+command with the variable set and say *why* it is there.
+
+**Verified rather than asserted this time.** With every provider key unset, the documented
+command produces `sweep.json` and `replication.json` **byte-identical** to the committed
+bundle — and the runner would have refused to write anything at all if one prompt had fallen
+through to the deterministic fallback, so a passing run is itself the proof that the cache
+covered every question the model was asked.
+
+**What it costs if this is wrong.** Nothing measured changes: the published numbers came from
+a run where the model *was* connected, and this only concerns whether a third party can
+replay them. The residual risk is the same one that caused it — the default model list is a
+moving target, and a future provider change will invalidate the committed cache again. The
+mitigation is that the failure is now loud (the runner refuses) rather than quiet, and the
+model name is printed next to the command instead of being implicit.

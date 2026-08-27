@@ -23,15 +23,22 @@ explicitly withdrawing consent.
 It classifies the root cause first, then acts on it:
 
 ```
-INSUFFICIENT_FUNDS   notify → retry 24h → 72h → 120h    (chases the pay cycle)
+INSUFFICIENT_FUNDS   notify → retry 24h → pay-now link 25h → retry 72h → 120h   (chases the pay cycle, then offers another way to pay)
 INSTRUMENT_INVALID   ask for a new card → final notice   (never retries the dead card)
 MANDATE_REVOKED      stop                                (never charges, never messages)
 TRANSIENT_ISSUER     retry 12h → 24h → 48h               (silent; it's the bank's problem)
 RISK_DECLINE         escalate to a human                 (a retry should not argue with a risk block)
-UNCLASSIFIED         notify → 24h → 72h → 120h
+UNCLASSIFIED         notify → retry 24h → pay-now link 25h → retry 72h → 120h
 ```
 
-The baseline runs that last row for **every** one of those causes.
+The baseline runs one row for **every** one of those causes: notify, then retry at
+T+1, T+2 and T+3 — no link, no request for a new card, and no stopping.
+
+A pay-now link is a **customer contact**, not a loophole around the rules that
+govern them: it obeys the contact window, the 24-hour minimum gap and the per-cause
+contact budget, it is refused at the policy gate for any cause outside the two it
+applies to, and delivery to the customer is **off by default** until a deployer
+opts in.
 
 ## What the experiment actually found
 
@@ -40,28 +47,30 @@ probability bands, four independent cohorts of 2,000 subjects.
 
 | Mid band, n=2000 | Baseline ladder | Recoup | | Spec target |
 |---|---|---|---|---|
-| Gross recovered | ₹18,35,622 | **₹20,85,999** | +13.6% | +10% ✅ |
-| Cost of chasing | ₹13,902 | **₹9,362** | −33% | — |
-| **Net recovered** | ₹18,21,720 | **₹20,76,637** | **+14.0%** | +15% ✗ |
-| Recovery rate | 46.0% | **52.4%** | +6.4pp | +5pp ✅ |
-| Attempts per recovery | 5.28 | **3.00** | −43.2% | −25% ✅ |
+| Gross recovered | ₹18,35,622 | **₹23,18,879** | +26.3% | +10% ✅ |
+| Cost of chasing | ₹13,902 | **₹8,795** | −36.7% | — |
+| **Net recovered** | ₹18,21,720 | **₹23,10,084** | **+26.8%** | +15% ✅ |
+| Recovery rate | 46.0% | **58.7%** | +12.7pp | +5pp ✅ |
+| Attempts per recovery | 5.28 | **2.46** | −53.4% | −25% ✅ |
 | Wasted attempts | 1,782 | **3** | −99.8% | >90% ✅ |
-| Time to recovery | **34.7h** | 39.4h | +4.7h | — |
+| Time to recovery | 34.7h | **34.4h** | −0.3h | — |
 
-**Net recovery misses its target by one point.** An earlier version of this table
-claimed +15.7% and cleared it. That run had no model provider configured, so 60%
-of ambiguous classifications silently fell back to `UNCLASSIFIED` and took the
-generic ladder — which recovers slightly more money at considerably more cost.
-The figures above are from a run where the classifier actually ran. See
-[Two defects in how the evidence was produced](#two-defects-in-how-the-evidence-was-produced).
+**Net recovery cleared its +15% target once failed payers were offered another way
+to pay.** It did not before: the previous published run came in at **+14.0%**, one
+point short, on a codebase that could tell a customer their payment failed but had
+nothing to offer them except the same instrument again. A pay-now link closed it —
+[D60](docs/decisions.md), and the honest accounting of what that link is and is not
+responsible for is below.
 
 All five headline findings **replicate in all four cohorts** — a finding counts
-only if it survives the Low/Mid/High sweep in *every* one, not on average.
+only if it survives the Low/Mid/High sweep in *every* one, not on average. Net lift
+clears +15% in **all twelve cells** (three bands × four cohorts); the worst is +21.6%.
 
-Recoup is **slower** — 4.5 hours slower on average. The probability lives in the
-later retries and it goes and gets it, and blocked contacts wait for the next
-permitted hour rather than being dropped. That is a real trade, not a win
-everywhere.
+Recoup is no longer **slower**, which it was for most of this project — it recovered
+more but 4.7 hours later, because the probability lives in the later retries and it
+went and got it. Offering a way to pay one hour after the first retry collects from
+customers who would otherwise have waited for the day-three retry: 39.4h → 34.4h,
+now marginally *faster* than the baseline rather than materially slower.
 
 ### The lift is not evenly earned, and the report says so
 
@@ -69,15 +78,15 @@ Gross recovered per cause, both arms, mid band:
 
 | Cause | Baseline | Recoup | |
 |---|---|---|---|
-| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,11,399** | **+₹1,99,403** |
-| `INSUFFICIENT_FUNDS` | ₹10,05,017 | **₹10,82,483** | **+₹77,466** |
-| `UNCLASSIFIED` | ₹2,83,368 | **₹2,87,865** | +₹4,497 |
+| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,56,874** | **+₹2,44,878** |
+| `INSUFFICIENT_FUNDS` | ₹10,05,017 | **₹11,93,917** | **+₹1,88,900** |
+| `UNCLASSIFIED` | ₹2,83,368 | **₹3,63,836** | **+₹80,468** |
 | `TRANSIENT_ISSUER` | **₹5,34,742** | ₹5,04,252 | −₹30,490 |
 | `RISK_DECLINE` | **₹499** | ₹0 | −₹499 |
 
 **Dead cards are where the whole thesis lives: ₹11,996 recovered by the baseline
-against ₹2,11,399 by Recoup**, roughly seventeenfold, because Recoup asks for a
-new card instead of hammering one that cannot work.
+against ₹2,56,874 by Recoup**, twenty-onefold, because Recoup asks for a new card
+instead of hammering one that cannot work.
 
 It loses on `TRANSIENT_ISSUER` — an outage is the one cause a plain retry ladder
 is already well suited to, and Recoup spends fewer attempts on it by design. And
@@ -88,6 +97,35 @@ are the cost of a policy that is stated in advance.
 That per-cause split and the near-total elimination of wasted attempts held
 across every version of the model during development. They are the claims to
 trust most.
+
+### What actually earned the money, and what the link is not responsible for
+
+A total lift is easy to take on trust. Recovered money is therefore also broken
+down by the mechanism that collected it, mid band:
+
+| Mechanism | Baseline | Recoup |
+|---|---|---|
+| `retry` | ₹18,35,622 | ₹17,36,664 |
+| `pay_now_link` | ₹0 | **₹3,25,341** |
+| `instrument_update` | ₹0 | **₹2,56,874** |
+
+**That ₹3,25,341 overstates what the link added, and the number to trust is
+smaller.** Credit goes to whichever mechanism actually collected the payment, so a
+customer the link converts on day two is credited to the link even when the day-four
+retry would have collected the same rupees. Measured against the identical run
+without the link — same seed, same cohort, byte-identical control arm — the two
+classes the link is permitted for gained **₹1,87,405**, not ₹3,25,341. About
+**two-fifths of the link's headline figure is money the ladder would have earned
+anyway** (31% at the Low band, 48% at the High). It earns real money *and* pulls
+existing money forward, which is also why time to recovery fell five hours.
+
+And **₹45,475 of the improvement is not the link at all.** Dead cards gained, on a
+cause `pay_now_link` is refused for at the policy gate. The audit trail says why: the
+planner prompt changed, every plan was therefore re-asked, and 71 of 409 dead cards
+now get a *second* request for a new card where they previously got a generic notice
+that carries no conversion probability at all. That is worth +25 recoveries and it
+belongs to the model, not to the link. Both figures are in
+[D60](docs/decisions.md).
 
 ### What it took to get here, stated plainly
 
@@ -119,10 +157,18 @@ recovery. That number was real, and three things changed between then and now:
    shortfall against targets set in advance, and a reader should weigh them
    knowing that order.
 
-A sceptical reader should know the −2.26% and the +14.0% come from the same
+A sceptical reader should know the −2.26% and the +26.8% come from the same
 codebase at different points, and part of the difference is judgement about what
 the model ought to represent. The two figures in the previous section are the
 ones that survived all of it.
+
+5. **The +15% net target was missed at +14.0% and then closed by adding a
+   capability, not by adjusting a constant.** Customers whose payment failed for
+   want of money were being told what happened and offered nothing to act on; they
+   now get a real Razorpay payment link. The one budget change that made room for it
+   (two contacts instead of one, on the two causes the link applies to) was made and
+   written down **before** the re-measurement, for a structural reason — D59 — which
+   is the opposite of the sequence in point 2. Nothing was adjusted afterwards.
 
 ### Two defects in how the evidence was produced
 
@@ -240,9 +286,13 @@ returning a plausible number.
 
 So **recovery outcomes are simulated** against published dunning benchmarks,
 declared in the report, and swept across three probability bands. The real
-Razorpay rail reads subscription state and builds hosted card-change links; its
-`charge` method **raises** rather than returning a plausible result, so
-simulated outcomes can never enter through the path labelled real.
+Razorpay rail reads subscription state, builds hosted card-change links and
+**creates real Razorpay payment links** through the live API; what it will not do is
+invent whether one was *paid* — `charge` and `deliver_pay_now_link` raise or return
+`False` rather than returning a plausible result, so simulated outcomes can never
+enter through the path labelled real. Link creation is real; link conversion
+(12%/22%/34%) is a declared assumption printed in the report's Assumptions table,
+and if the true rate sits materially below the Low band the +15% target reopens.
 
 Ingestion is real and has been proven end to end. **Razorpay signed a
 `payment.failed` event and delivered it over the public internet to the
@@ -274,19 +324,30 @@ each blocked action and the rule that blocked it.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 484 tests
+python -m pytest -q                       # 601 tests
 
-python -m scripts.run_experiment --cohort-size 200 --seed 3     --replicate 11,29,47 --out-dir artifacts --freeze
+python -m scripts.run_experiment --cohort-size 2000 --seed 3     --replicate 11,29,47 --out-dir artifacts --freeze
 ```
 
 That writes `report.md`, machine-readable `sweep.json` and `replication.json`,
 and audit CSVs for both arms at all three bands. A generated copy is committed
 under [`evidence/`](evidence/).
 
-**Reproducing with no API key:** `evidence/llm_cache.json` holds every model
-response the run needed, keyed by prompt hash. Copy it into your output
-directory and the experiment replays exactly, offline. Verified with the key
-unset.
+**Reproducing with no API key:**
+
+```bash
+mkdir -p artifacts && cp evidence/llm_cache.json artifacts/
+RECOUP_LLM_MODEL=openai/gpt-oss-120b   python -m scripts.run_experiment --cohort-size 2000 --seed 3       --replicate 11,29,47 --out-dir artifacts
+```
+
+`evidence/llm_cache.json` holds every model response the published run needed,
+keyed by a hash of `model | system | user | max_tokens`. That first component is
+why the model has to be named: the cache was filled by `openai/gpt-oss-120b`, and
+a run that guesses a different model asks a different question. Verified with
+every provider key unset — the sweep and the replication come back
+**byte-identical** to the committed bundle, and the runner would have refused to
+write anything if a single prompt had fallen through to the deterministic
+fallback.
 
 Drop `--no-llm` to use a model for ambiguous declines and plan authoring.
 Responses are cached by prompt hash, so a rerun reproduces the same report
@@ -299,7 +360,7 @@ preferred over paid ones when several keys are present.
 
 | Provider | Env var | Free tier | Default model |
 |---|---|---|---|
-| Groq | `GROQ_API_KEY` | yes, no card | `llama-3.3-70b-versatile` |
+| Groq | `GROQ_API_KEY` | yes, no card | `openai/gpt-oss-120b` |
 | Google AI Studio | `GEMINI_API_KEY` | yes, no card | `gemini-2.0-flash` |
 | OpenRouter | `OPENROUTER_API_KEY` | yes, `:free` models | `meta-llama/llama-3.3-70b-instruct:free` |
 | Together | `TOGETHER_API_KEY` | yes | `Llama-3.3-70B-Instruct-Turbo-Free` |
@@ -343,8 +404,8 @@ gateway-sourced causes.
 everything else:**
 
 ```
-mean effect on net lift : +₹7,753
-spread                  : −₹2,889 to +₹17,581
+mean effect on net lift : +₹13,230
+spread                  : −₹13,651 to +₹33,436
 positive in             : 3 of 4 cohorts  →  does not replicate
 ```
 
@@ -352,9 +413,11 @@ A finding counts here only if it holds in *every* cohort. The AI's
 classification gain clears that bar. Its money contribution does not, and is
 reported as not replicating rather than as a mean that happens to be positive.
 
-The clearest thing it does earn: it finds dead cards hiding behind
-uninformative reason strings and routes them to a new-card request instead of
-retries that cannot work — **+6 recoveries, +₹8,494** on that cause alone.
+The clearest thing it does earn, and the one contribution that clears the bar:
+it finds dead cards hiding behind uninformative reason strings and routes them to a
+new-card request instead of retries that cannot work. Against the deterministic
+planner that is **+₹8,994 to +₹79,463, positive in all twelve cells** — every band
+of every cohort — around +₹49,000 at the mid band.
 
 **Everything it returns is validated before anything acts on it.** Asked to
 invent a failure class, retry a dead card five times, write its own threatening
@@ -374,4 +437,5 @@ planner is a floor it has to clear, not merely a fallback.
 | `recoup/execute/` | Payment rail protocol, simulated rail, executor, templates |
 | `recoup/experiment/` | Control arm, paired harness, sensitivity sweep |
 | `recoup/ingest/` | Live webhook receiver and the synthetic cohort |
+| `recoup/razorpay/` | GET-only read client, detection scanner, payment-link writer |
 | `docs/decisions.md` | Every problem hit, what was chosen, and what it costs if wrong |

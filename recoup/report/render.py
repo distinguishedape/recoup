@@ -259,6 +259,11 @@ def render_report(sweep: SweepResult, replication: ReplicationResult | None = No
         + " | ".join(f"{BANDS[band].update_request_conversion * 100:.0f}%" for band in Band)
         + " |"
     )
+    lines.append(
+        "| pay-now link conversion | "
+        + " | ".join(f"{BANDS[band].pay_now_conversion * 100:.0f}%" for band in Band)
+        + " |"
+    )
     lines.append("")
     lines.append("**Per-class attempt budgets**")
     lines.append("")

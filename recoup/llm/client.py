@@ -23,6 +23,7 @@ from recoup.llm.providers import (
     ANTHROPIC,
     DEFAULT_MODELS,
     KEY_ENV_VARS,
+    MODEL_ENV_VAR,
     TEMPERATURE,
     Transport,
     build_transport,
@@ -55,8 +56,16 @@ class LLMClient:
             provider_hint = detect_provider(environment) or ANTHROPIC
             environment.setdefault(KEY_ENV_VARS[provider_hint], api_key)
         self.provider = detect_provider(environment) if transport is None else None
+        # ``RECOUP_LLM_MODEL`` is honoured even with no provider detected, and
+        # that is not a convenience. The cache key includes the model name, so
+        # replaying the committed cache offline means naming the model that
+        # filled it; falling back to ``DEFAULT_MODEL`` here made every key miss
+        # the moment the project's provider moved from Anthropic to Groq, and
+        # silently broke the documented "reproduce with no API key" path.
         self.model = model or (
-            model_for(self.provider, environment) if self.provider else DEFAULT_MODEL
+            model_for(self.provider, environment)
+            if self.provider
+            else environment.get(MODEL_ENV_VAR) or DEFAULT_MODEL
         )
         self.calls = 0
         self.unserved = 0

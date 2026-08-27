@@ -45,35 +45,43 @@
         },
         "money_by_tier": {
           "1": 142581500
+        },
+        "money_by_mechanism": {
+          "retry": 142581500
         }
       },
       "treatment": {
         "arm": "treatment",
         "cohort_size": 2000,
-        "recovered": 768,
+        "recovered": 855,
         "voluntary_churn": 91,
         "manual_review": 87,
-        "unrecovered": 1054,
+        "unrecovered": 967,
         "involuntary_denominator": 1909,
-        "recovery_rate": 0.4023048716605553,
-        "gross_recovered_paise": 158623200,
-        "total_cost_paise": 1024375,
-        "net_recovered_paise": 157598825,
-        "charge_attempts": 3294,
-        "attempts_per_recovery": 4.2890625,
+        "recovery_rate": 0.44787847040335255,
+        "gross_recovered_paise": 176814500,
+        "total_cost_paise": 994260,
+        "net_recovered_paise": 175820240,
+        "charge_attempts": 3128,
+        "attempts_per_recovery": 3.6584795321637427,
         "wasted_attempts": 1,
-        "mean_hours_to_recovery": 42.428773816788194,
+        "mean_hours_to_recovery": 38.66626236509552,
         "money_by_class": {
-          "INSUFFICIENT_FUNDS": 81510900,
-          "INSTRUMENT_INVALID": 11294400,
+          "INSUFFICIENT_FUNDS": 90456200,
+          "INSTRUMENT_INVALID": 14692900,
           "MANDATE_REVOKED": 0,
           "TRANSIENT_ISSUER": 45027500,
           "RISK_DECLINE": 0,
-          "UNCLASSIFIED": 20790400
+          "UNCLASSIFIED": 26637900
         },
         "money_by_tier": {
-          "1": 139731700,
-          "2": 18891500
+          "1": 140632000,
+          "2": 36182500
+        },
+        "money_by_mechanism": {
+          "retry": 140632000,
+          "instrument_update": 14692900,
+          "pay_now_link": 21489600
         }
       },
       "comparison": {
@@ -103,41 +111,49 @@
           },
           "money_by_tier": {
             "1": 142581500
+          },
+          "money_by_mechanism": {
+            "retry": 142581500
           }
         },
         "treatment": {
           "arm": "treatment",
           "cohort_size": 2000,
-          "recovered": 768,
+          "recovered": 855,
           "voluntary_churn": 91,
           "manual_review": 87,
-          "unrecovered": 1054,
+          "unrecovered": 967,
           "involuntary_denominator": 1909,
-          "recovery_rate": 0.4023048716605553,
-          "gross_recovered_paise": 158623200,
-          "total_cost_paise": 1024375,
-          "net_recovered_paise": 157598825,
-          "charge_attempts": 3294,
-          "attempts_per_recovery": 4.2890625,
+          "recovery_rate": 0.44787847040335255,
+          "gross_recovered_paise": 176814500,
+          "total_cost_paise": 994260,
+          "net_recovered_paise": 175820240,
+          "charge_attempts": 3128,
+          "attempts_per_recovery": 3.6584795321637427,
           "wasted_attempts": 1,
-          "mean_hours_to_recovery": 42.428773816788194,
+          "mean_hours_to_recovery": 38.66626236509552,
           "money_by_class": {
-            "INSUFFICIENT_FUNDS": 81510900,
-            "INSTRUMENT_INVALID": 11294400,
+            "INSUFFICIENT_FUNDS": 90456200,
+            "INSTRUMENT_INVALID": 14692900,
             "MANDATE_REVOKED": 0,
             "TRANSIENT_ISSUER": 45027500,
             "RISK_DECLINE": 0,
-            "UNCLASSIFIED": 20790400
+            "UNCLASSIFIED": 26637900
           },
           "money_by_tier": {
-            "1": 139731700,
-            "2": 18891500
+            "1": 140632000,
+            "2": 36182500
+          },
+          "money_by_mechanism": {
+            "retry": 140632000,
+            "instrument_update": 14692900,
+            "pay_now_link": 21489600
           }
         },
-        "gross_lift_paise": 16041700,
-        "net_lift_paise": 16513725,
-        "recovery_rate_lift_pp": 4.347826086956524,
-        "attempts_per_recovery_delta": -2.992689324817518,
+        "gross_lift_paise": 34233000,
+        "net_lift_paise": 34735140,
+        "recovery_rate_lift_pp": 8.905185961236251,
+        "attempts_per_recovery_delta": -3.6232722926537755,
         "wasted_attempts_avoided": 1796,
         "wasted_attempt_reduction": 0.9994435169727324
       },
@@ -180,35 +196,43 @@
         },
         "money_by_tier": {
           "1": 183562200
+        },
+        "money_by_mechanism": {
+          "retry": 183562200
         }
       },
       "treatment": {
         "arm": "treatment",
         "cohort_size": 2000,
-        "recovered": 1001,
+        "recovered": 1121,
         "voluntary_churn": 91,
         "manual_review": 87,
-        "unrecovered": 821,
+        "unrecovered": 701,
         "involuntary_denominator": 1909,
-        "recovery_rate": 0.5243583027763227,
-        "gross_recovered_paise": 208599900,
-        "total_cost_paise": 936210,
-        "net_recovered_paise": 207663690,
-        "charge_attempts": 3003,
-        "attempts_per_recovery": 3.0,
+        "recovery_rate": 0.5872184389732844,
+        "gross_recovered_paise": 231887900,
+        "total_cost_paise": 879530,
+        "net_recovered_paise": 231008370,
+        "charge_attempts": 2757,
+        "attempts_per_recovery": 2.4594112399643175,
         "wasted_attempts": 3,
-        "mean_hours_to_recovery": 39.36038889153236,
+        "mean_hours_to_recovery": 34.44213526683963,
         "money_by_class": {
-          "INSUFFICIENT_FUNDS": 108248300,
-          "INSTRUMENT_INVALID": 21139900,
+          "INSUFFICIENT_FUNDS": 119391700,
+          "INSTRUMENT_INVALID": 25687400,
           "MANDATE_REVOKED": 0,
           "TRANSIENT_ISSUER": 50425200,
           "RISK_DECLINE": 0,
-          "UNCLASSIFIED": 28786500
+          "UNCLASSIFIED": 36383600
         },
         "money_by_tier": {
-          "1": 178313600,
-          "2": 30286300
+          "1": 173666400,
+          "2": 58221500
+        },
+        "money_by_mechanism": {
+          "retry": 173666400,
+          "instrument_update": 25687400,
+          "pay_now_link": 32534100
         }
       },
       "comparison": {
@@ -238,41 +262,49 @@
           },
           "money_by_tier": {
             "1": 183562200
+          },
+          "money_by_mechanism": {
+            "retry": 183562200
           }
         },
         "treatment": {
           "arm": "treatment",
           "cohort_size": 2000,
-          "recovered": 1001,
+          "recovered": 1121,
           "voluntary_churn": 91,
           "manual_review": 87,
-          "unrecovered": 821,
+          "unrecovered": 701,
           "involuntary_denominator": 1909,
-          "recovery_rate": 0.5243583027763227,
-          "gross_recovered_paise": 208599900,
-          "total_cost_paise": 936210,
-          "net_recovered_paise": 207663690,
-          "charge_attempts": 3003,
-          "attempts_per_recovery": 3.0,
+          "recovery_rate": 0.5872184389732844,
+          "gross_recovered_paise": 231887900,
+          "total_cost_paise": 879530,
+          "net_recovered_paise": 231008370,
+          "charge_attempts": 2757,
+          "attempts_per_recovery": 2.4594112399643175,
           "wasted_attempts": 3,
-          "mean_hours_to_recovery": 39.36038889153236,
+          "mean_hours_to_recovery": 34.44213526683963,
           "money_by_class": {
-            "INSUFFICIENT_FUNDS": 108248300,
-            "INSTRUMENT_INVALID": 21139900,
+            "INSUFFICIENT_FUNDS": 119391700,
+            "INSTRUMENT_INVALID": 25687400,
             "MANDATE_REVOKED": 0,
             "TRANSIENT_ISSUER": 50425200,
             "RISK_DECLINE": 0,
-            "UNCLASSIFIED": 28786500
+            "UNCLASSIFIED": 36383600
           },
           "money_by_tier": {
-            "1": 178313600,
-            "2": 30286300
+            "1": 173666400,
+            "2": 58221500
+          },
+          "money_by_mechanism": {
+            "retry": 173666400,
+            "instrument_update": 25687400,
+            "pay_now_link": 32534100
           }
         },
-        "gross_lift_paise": 25037700,
-        "net_lift_paise": 25491690,
-        "recovery_rate_lift_pp": 6.44316396018858,
-        "attempts_per_recovery_delta": -2.2779043280182236,
+        "gross_lift_paise": 48325700,
+        "net_lift_paise": 48836370,
+        "recovery_rate_lift_pp": 12.729177579884754,
+        "attempts_per_recovery_delta": -2.818493088053906,
         "wasted_attempts_avoided": 1779,
         "wasted_attempt_reduction": 0.9983164983164983
       },
@@ -315,35 +347,43 @@
         },
         "money_by_tier": {
           "1": 217596600
+        },
+        "money_by_mechanism": {
+          "retry": 217596600
         }
       },
       "treatment": {
         "arm": "treatment",
         "cohort_size": 2000,
-        "recovered": 1204,
+        "recovered": 1363,
         "voluntary_churn": 91,
         "manual_review": 87,
-        "unrecovered": 618,
+        "unrecovered": 459,
         "involuntary_denominator": 1909,
-        "recovery_rate": 0.6306966998428497,
-        "gross_recovered_paise": 251129600,
-        "total_cost_paise": 858720,
-        "net_recovered_paise": 250270880,
-        "charge_attempts": 2748,
-        "attempts_per_recovery": 2.2823920265780733,
-        "wasted_attempts": 4,
-        "mean_hours_to_recovery": 36.65252945893503,
+        "recovery_rate": 0.713986380303824,
+        "gross_recovered_paise": 283013700,
+        "total_cost_paise": 767490,
+        "net_recovered_paise": 282246210,
+        "charge_attempts": 2395,
+        "attempts_per_recovery": 1.7571533382245048,
+        "wasted_attempts": 6,
+        "mean_hours_to_recovery": 30.30839280423983,
         "money_by_class": {
-          "INSUFFICIENT_FUNDS": 131436700,
-          "INSTRUMENT_INVALID": 32184900,
+          "INSUFFICIENT_FUNDS": 144729500,
+          "INSTRUMENT_INVALID": 38431200,
           "MANDATE_REVOKED": 0,
           "TRANSIENT_ISSUER": 53474200,
           "RISK_DECLINE": 0,
-          "UNCLASSIFIED": 34033800
+          "UNCLASSIFIED": 46378800
         },
         "money_by_tier": {
-          "1": 207699300,
-          "2": 43430300
+          "1": 195606300,
+          "2": 87407400
+        },
+        "money_by_mechanism": {
+          "retry": 195606300,
+          "instrument_update": 38431200,
+          "pay_now_link": 48976200
         }
       },
       "comparison": {
@@ -373,43 +413,51 @@
           },
           "money_by_tier": {
             "1": 217596600
+          },
+          "money_by_mechanism": {
+            "retry": 217596600
           }
         },
         "treatment": {
           "arm": "treatment",
           "cohort_size": 2000,
-          "recovered": 1204,
+          "recovered": 1363,
           "voluntary_churn": 91,
           "manual_review": 87,
-          "unrecovered": 618,
+          "unrecovered": 459,
           "involuntary_denominator": 1909,
-          "recovery_rate": 0.6306966998428497,
-          "gross_recovered_paise": 251129600,
-          "total_cost_paise": 858720,
-          "net_recovered_paise": 250270880,
-          "charge_attempts": 2748,
-          "attempts_per_recovery": 2.2823920265780733,
-          "wasted_attempts": 4,
-          "mean_hours_to_recovery": 36.65252945893503,
+          "recovery_rate": 0.713986380303824,
+          "gross_recovered_paise": 283013700,
+          "total_cost_paise": 767490,
+          "net_recovered_paise": 282246210,
+          "charge_attempts": 2395,
+          "attempts_per_recovery": 1.7571533382245048,
+          "wasted_attempts": 6,
+          "mean_hours_to_recovery": 30.30839280423983,
           "money_by_class": {
-            "INSUFFICIENT_FUNDS": 131436700,
-            "INSTRUMENT_INVALID": 32184900,
+            "INSUFFICIENT_FUNDS": 144729500,
+            "INSTRUMENT_INVALID": 38431200,
             "MANDATE_REVOKED": 0,
             "TRANSIENT_ISSUER": 53474200,
             "RISK_DECLINE": 0,
-            "UNCLASSIFIED": 34033800
+            "UNCLASSIFIED": 46378800
           },
           "money_by_tier": {
-            "1": 207699300,
-            "2": 43430300
+            "1": 195606300,
+            "2": 87407400
+          },
+          "money_by_mechanism": {
+            "retry": 195606300,
+            "instrument_update": 38431200,
+            "pay_now_link": 48976200
           }
         },
-        "gross_lift_paise": 33533000,
-        "net_lift_paise": 33977180,
-        "recovery_rate_lift_pp": 8.905185961236251,
-        "attempts_per_recovery_delta": -1.917801397019606,
-        "wasted_attempts_avoided": 1754,
-        "wasted_attempt_reduction": 0.9977246871444824
+        "gross_lift_paise": 65417100,
+        "net_lift_paise": 65952510,
+        "recovery_rate_lift_pp": 17.23415400733368,
+        "attempts_per_recovery_delta": -2.443040085373174,
+        "wasted_attempts_avoided": 1752,
+        "wasted_attempt_reduction": 0.9965870307167235
       },
       "control_audit_path": "artifacts\\audit\\high\\control.db",
       "treatment_audit_path": "artifacts\\audit\\high\\treatment.db"
@@ -419,9 +467,9 @@
     {
       "name": "gross_recovered",
       "unit": "paise",
-      "low": 16041700.0,
-      "mid": 25037700.0,
-      "high": 33533000.0,
+      "low": 34233000.0,
+      "mid": 48325700.0,
+      "high": 65417100.0,
       "higher_is_better": true,
       "survives": true,
       "note": "holds at every band"
@@ -429,9 +477,9 @@
     {
       "name": "net_recovered",
       "unit": "paise",
-      "low": 16513725.0,
-      "mid": 25491690.0,
-      "high": 33977180.0,
+      "low": 34735140.0,
+      "mid": 48836370.0,
+      "high": 65952510.0,
       "higher_is_better": true,
       "survives": true,
       "note": "holds at every band"
@@ -439,9 +487,9 @@
     {
       "name": "recovery_rate",
       "unit": "percentage points",
-      "low": 4.347826086956524,
-      "mid": 6.44316396018858,
-      "high": 8.905185961236251,
+      "low": 8.905185961236251,
+      "mid": 12.729177579884754,
+      "high": 17.23415400733368,
       "higher_is_better": true,
       "survives": true,
       "note": "holds at every band"
@@ -449,9 +497,9 @@
     {
       "name": "attempts_per_recovery",
       "unit": "attempts",
-      "low": -2.992689324817518,
-      "mid": -2.2779043280182236,
-      "high": -1.917801397019606,
+      "low": -3.6232722926537755,
+      "mid": -2.818493088053906,
+      "high": -2.443040085373174,
       "higher_is_better": false,
       "survives": true,
       "note": "holds at every band"
@@ -461,7 +509,7 @@
       "unit": "attempts avoided",
       "low": 1796.0,
       "mid": 1779.0,
-      "high": 1754.0,
+      "high": 1752.0,
       "higher_is_better": true,
       "survives": true,
       "note": "holds at every band"

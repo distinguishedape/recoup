@@ -79,3 +79,22 @@ def test_no_api_key_and_no_transport_means_unavailable_not_a_crash(tmp_path):
     client = LLMClient(tmp_path / "cache.json", env={})
     with pytest.raises(LLMUnavailable):
         client.complete("sys", "user")
+
+
+def test_a_pinned_model_name_survives_having_no_provider_key(tmp_path):
+    """The cache key includes the model name, so replaying a committed cache
+    offline requires naming the model that filled it. Without this, a run with
+    no key silently falls back to a *different* default model, every key misses,
+    and the documented "reproduce with no API key" path cannot work -- which is
+    exactly what happened once the provider moved from Anthropic to Groq."""
+    filled = LLMClient(
+        tmp_path / "cache.json",
+        env={"GROQ_API_KEY": "k", "RECOUP_LLM_MODEL": "openai/gpt-oss-120b"},
+        transport=lambda m, s, u, t: "cached answer",
+    )
+    filled.complete("sys", "user")
+
+    offline = LLMClient(tmp_path / "cache.json", env={"RECOUP_LLM_MODEL": "openai/gpt-oss-120b"})
+    assert offline.model == "openai/gpt-oss-120b"
+    assert offline.complete("sys", "user") == "cached answer"
+    assert offline.unserved == 0

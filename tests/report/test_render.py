@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from recoup.execute.probabilities import BANDS
 from recoup.experiment.sweep import run_sweep
 from recoup.models.enums import Band
 from recoup.orchestrate.runner import RunConfig, config_hash
@@ -114,3 +115,13 @@ def test_the_report_shows_what_actually_earned_the_money(sweep):
     report = render_report(sweep)
     assert "What actually earned the money" in report
     assert "`retry`" in report
+
+
+def test_the_report_declares_the_pay_now_conversion_it_assumed(sweep):
+    """The link earns money in the mechanism table, so its probability is an
+    assumption the reader is owed -- swept across the three bands like every
+    other one, not left implicit behind a number it produced."""
+    report = render_report(sweep)
+    assert "pay-now link conversion" in report
+    for band in Band:
+        assert f"{BANDS[band].pay_now_conversion * 100:.0f}%" in report

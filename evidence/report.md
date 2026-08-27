@@ -7,9 +7,9 @@ Cohort of 2000 failed subscription charges, seed 3, configuration hash `7aa7962c
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹18,35,622.00 | ₹13,902.00 | ₹18,21,720.00 | 46.0% | 5.28 | 1782 | 34.7h |
-| Recoup | ₹20,85,999.00 | ₹9,362.10 | ₹20,76,636.90 | 52.4% | 3.00 | 3 | 39.4h |
+| Recoup | ₹23,18,879.00 | ₹8,795.30 | ₹23,10,083.70 | 58.7% | 2.46 | 3 | 34.4h |
 
-Gross lift ₹2,50,377.00 - net lift ₹2,54,916.90 - recovery rate +6.4pp - wasted attempts avoided 1779.
+Gross lift ₹4,83,257.00 - net lift ₹4,88,363.70 - recovery rate +12.7pp - wasted attempts avoided 1779.
 
 ## Where the lift comes from
 
@@ -17,12 +17,12 @@ Gross recovered per failure cause, both arms. A total is easy to take on trust; 
 
 | Cause | Baseline | Recoup | Difference |
 |---|---|---|---|
-| `INSUFFICIENT_FUNDS` | ₹10,05,017.00 | ₹10,82,483.00 | **₹77,466.00** |
-| `INSTRUMENT_INVALID` | ₹11,996.00 | ₹2,11,399.00 | **₹1,99,403.00** |
+| `INSUFFICIENT_FUNDS` | ₹10,05,017.00 | ₹11,93,917.00 | **₹1,88,900.00** |
+| `INSTRUMENT_INVALID` | ₹11,996.00 | ₹2,56,874.00 | **₹2,44,878.00** |
 | `MANDATE_REVOKED` | ₹0.00 | ₹0.00 | ₹0.00 |
 | `TRANSIENT_ISSUER` | ₹5,34,742.00 | ₹5,04,252.00 | **-₹30,490.00** |
 | `RISK_DECLINE` | ₹499.00 | ₹0.00 | -₹499.00 |
-| `UNCLASSIFIED` | ₹2,83,368.00 | ₹2,87,865.00 | **₹4,497.00** |
+| `UNCLASSIFIED` | ₹2,83,368.00 | ₹3,63,836.00 | **₹80,468.00** |
 
 ## How far up the ladder subjects travelled
 
@@ -30,18 +30,28 @@ Recovered money by the escalation tier that achieved it. The baseline has no lad
 
 | Tier | Baseline | Recoup |
 |---|---|---|
-| T1 notify | ₹18,35,622.00 | ₹17,83,136.00 |
-| T2 request action | ₹0.00 | ₹3,02,863.00 |
+| T1 notify | ₹18,35,622.00 | ₹17,36,664.00 |
+| T2 request action | ₹0.00 | ₹5,82,215.00 |
+
+## What actually earned the money
+
+Gross recovered by the mechanism that produced it, mid band. A total lift is easy to take on trust; this is the table that says how much of it the pay-now link is responsible for, rather than the retry ladder underneath it. The baseline has no payment link and never will, so its money is entirely `retry`.
+
+| Mechanism | Baseline | Recoup |
+|---|---|---|
+| `instrument_update` | ₹0.00 | ₹2,56,874.00 |
+| `pay_now_link` | ₹0.00 | ₹3,25,341.00 |
+| `retry` | ₹18,35,622.00 | ₹17,36,664.00 |
 
 ## Findings across the sensitivity sweep
 
 | Finding | Low | Mid | High | Verdict | Note |
 |---|---|---|---|---|---|
-| gross_recovered | ₹1,60,417.00 | ₹2,50,377.00 | ₹3,35,330.00 | **survives** | holds at every band |
-| net_recovered | ₹1,65,137.25 | ₹2,54,916.90 | ₹3,39,771.80 | **survives** | holds at every band |
-| recovery_rate | +4.3pp | +6.4pp | +8.9pp | **survives** | holds at every band |
-| attempts_per_recovery | -2.99 | -2.28 | -1.92 | **survives** | holds at every band |
-| wasted_attempts | +1796.00 | +1779.00 | +1754.00 | **survives** | holds at every band |
+| gross_recovered | ₹3,42,330.00 | ₹4,83,257.00 | ₹6,54,171.00 | **survives** | holds at every band |
+| net_recovered | ₹3,47,351.40 | ₹4,88,363.70 | ₹6,59,525.10 | **survives** | holds at every band |
+| recovery_rate | +8.9pp | +12.7pp | +17.2pp | **survives** | holds at every band |
+| attempts_per_recovery | -3.62 | -2.82 | -2.44 | **survives** | holds at every band |
+| wasted_attempts | +1796.00 | +1779.00 | +1752.00 | **survives** | holds at every band |
 
 A finding is reported as surviving only if it points the right way at **all three** bands. A lift that appears only at the High band is reported as not surviving, however large it is.
 
@@ -51,11 +61,11 @@ The same experiment run over 4 independent cohorts of 2000 subjects each. A find
 
 | Finding | seed 3 | seed 11 | seed 29 | seed 47 | mean | Verdict |
 |---|---|---|---|---|---|---|
-| gross_recovered | ₹2,50,377.00 | ₹3,40,842.00 | ₹3,08,365.00 | ₹2,55,368.00 | ₹2,88,738.00 | **replicates** |
-| net_recovered | ₹2,54,916.90 | ₹3,45,371.35 | ₹3,12,885.75 | ₹2,59,659.85 | ₹2,93,208.46 | **replicates** |
-| recovery_rate | +6.4pp | +8.4pp | +7.1pp | +6.9pp | +7.2pp | **replicates** |
-| attempts_per_recovery | -2.28 | -2.41 | -2.23 | -2.10 | -2.26 | **replicates** |
-| wasted_attempts | +1779.00 | +1755.00 | +1773.00 | +1687.00 | +1748.50 | **replicates** |
+| gross_recovered | ₹4,83,257.00 | ₹5,70,235.00 | ₹5,70,254.00 | ₹5,11,747.00 | ₹5,33,873.25 | **replicates** |
+| net_recovered | ₹4,88,363.70 | ₹5,75,328.65 | ₹5,75,323.90 | ₹5,16,700.00 | ₹5,38,929.06 | **replicates** |
+| recovery_rate | +12.7pp | +14.0pp | +13.0pp | +13.2pp | +13.3pp | **replicates** |
+| attempts_per_recovery | -2.82 | -2.90 | -2.72 | -2.64 | -2.77 | **replicates** |
+| wasted_attempts | +1779.00 | +1755.00 | +1772.00 | +1686.00 | +1748.00 | **replicates** |
 
 
 ## Per-band detail
@@ -65,21 +75,21 @@ The same experiment run over 4 independent cohorts of 2000 subjects each. A find
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹14,25,815.00 | ₹14,964.00 | ₹14,10,851.00 | 35.9% | 7.28 | 1797 | 36.5h |
-| Recoup | ₹15,86,232.00 | ₹10,243.75 | ₹15,75,988.25 | 40.2% | 4.29 | 1 | 42.4h |
+| Recoup | ₹17,68,145.00 | ₹9,942.60 | ₹17,58,202.40 | 44.8% | 3.66 | 1 | 38.7h |
 
 ### Mid band
 
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹18,35,622.00 | ₹13,902.00 | ₹18,21,720.00 | 46.0% | 5.28 | 1782 | 34.7h |
-| Recoup | ₹20,85,999.00 | ₹9,362.10 | ₹20,76,636.90 | 52.4% | 3.00 | 3 | 39.4h |
+| Recoup | ₹23,18,879.00 | ₹8,795.30 | ₹23,10,083.70 | 58.7% | 2.46 | 3 | 34.4h |
 
 ### High band
 
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹21,75,966.00 | ₹13,029.00 | ₹21,62,937.00 | 54.2% | 4.20 | 1758 | 33.5h |
-| Recoup | ₹25,11,296.00 | ₹8,587.20 | ₹25,02,708.80 | 63.1% | 2.28 | 4 | 36.7h |
+| Recoup | ₹28,30,137.00 | ₹7,674.90 | ₹28,22,462.10 | 71.4% | 1.76 | 6 | 30.3h |
 
 ## The baseline this was compared against
 
@@ -115,17 +125,18 @@ Recovery outcomes are **simulated**. Razorpay test mode offers only Charge-as-Su
 | `RISK_DECLINE` | 0.0% | 1.5% | 3.0% |
 | `UNCLASSIFIED` | 20.0% | 30.0% | 40.0% |
 | instrument-update conversion | 20% | 35% | 50% |
+| pay-now link conversion | 12% | 22% | 34% |
 
 **Per-class attempt budgets**
 
 | Class | Charge retries | Contacts |
 |---|---|---|
-| `INSUFFICIENT_FUNDS` | 3 | 1 |
+| `INSUFFICIENT_FUNDS` | 3 | 2 |
 | `INSTRUMENT_INVALID` | 0 | 2 |
 | `MANDATE_REVOKED` | 0 | 0 |
 | `TRANSIENT_ISSUER` | 3 | 0 |
 | `RISK_DECLINE` | 0 | 0 |
-| `UNCLASSIFIED` | 3 | 1 |
+| `UNCLASSIFIED` | 3 | 2 |
 
 ## Definitions
 
