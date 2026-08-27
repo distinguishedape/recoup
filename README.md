@@ -176,11 +176,53 @@ clear** — plans are scored against the timing model and the model's is used on
 when it is genuinely better. That makes the model upside-only rather than a
 liability.
 
+## Detecting, not just being told
+
+A webhook is a push: it reports a failure the moment it happens and reports
+nothing else. Two of the three risk surfaces the brief names have no webhook to
+wait for, because *nothing happened* is not an event. So Recoup also goes
+looking — `recoup/detect/scanner.py`, against real list queries:
+
+| Surface | Found by | What it yields |
+|---|---|---|
+| Payment failures | `subscriptions` in `pending`/`halted` | the same revenue the push reports, found without one |
+| Checkout abandonment | unpaid `orders` past a threshold | see below |
+| Overdue receivables | `invoices` past `due_by` | unpaid balance, detected not yet actioned |
+
+On the first run against the live test account it found **₹3,497 at risk across
+three abandoned checkouts**.
+
+**Razorpay gives away a cause signal for free.** An order with `attempts=0` is a
+customer who never tried; one with `attempts=3` tried and was declined three
+times. Those are different problems wanting different answers — this product's
+thesis applied to a second surface. So an attempted order's failed payments are
+fetched and converted into a `FailureEvent` carrying the real `error_reason`,
+which the existing classifier handles unchanged; and an order nobody attempted
+is reported as `actionable=False` **with no failure class assigned**, because
+nobody declined anything and inventing a cause would be the fabrication this
+codebase keeps refusing.
+
+Every method on the read client is a GET, and a test asserts the module contains
+no write verb — detection runs on a schedule against a live account, so it
+should be safe without anyone reading the code to be sure.
+
+The webhook receiver now runs the agent rather than logging to it. For most of
+this project `_default_app()` passed no sink, so a signed event was verified,
+mapped, written to the audit log and dropped — every claim here rested on the
+simulation while the deployed artefact was a receiver. `LiveAgent` closes that.
+
+```
+python -m scripts.error_card_walk --create   # one order per error-scenario card
+python -m scripts.error_card_walk --verify   # classify whatever actually arrived
+```
+
 ## Honesty about what is simulated
 
 Razorpay test mode offers only *Charge as Success* and *Charge as Failure* from
-the Dashboard. It cannot inject a specific decline reason, and it exposes no
-manual-retry API for domestic cards.
+the Dashboard for subscription invoices, and it exposes no manual-retry API for
+domestic cards. It *can* inject specific decline reasons on the order checkout
+path, via published error-scenario test cards — an earlier version of this
+README said otherwise, following spike finding F1, and F1 was too strong.
 
 So **recovery outcomes are simulated** against published dunning benchmarks,
 declared in the report, and swept across three probability bands. The real

@@ -1129,12 +1129,101 @@ Both defects were invisible to 514 tests, because every test constructs its own 
 `tmp_path` and its own client with an explicit transport. The tests were right about the units
 and silent about the wiring.
 
+## Phase 13 — Closing the open items: the agent runs, and it goes looking
+
+### D54. The gate was extracted before a second copy of it existed
+
+Two things were about to run the pipeline: the simulation runner and a live agent. The policy
+gate is the part that must not differ between them, because a divergence there is not a wrong
+number — it is a compliance rule that applies in the measurement and not in production.
+
+This session had already paid for that lesson. The experiment runner and the console
+disagreed for a week because one loaded credentials and the other did not ([[D52]]), and an
+entire evidence bundle was published from the degraded path. That was a *wiring* difference
+nobody could see. `recoup/policy/gate.py` exists so the *decision* cannot become one: both
+callers get `Execute | Reschedule | Block` from the same function, and both write their audit
+payloads from the same helpers, so a change to the reschedule rule reaches production and the
+experiment in one commit or neither.
+
+Written before the live agent rather than after, and the runner was moved onto it first — the
+whole experiment reproduces to the paise, which is what proves the extraction changed nothing.
+
+### D55. The live path now runs the agent (closes D47)
+
+`LiveAgent` classifies, plans, gates and acts on a real event. Three things are deliberately
+different from the simulation, all of them refusals to fabricate:
+
+- **The rail is supplied, not assumed.** `RazorpayTestRail.charge()` raises (F2). The agent
+  catches that and writes `execute_unsupported` naming the reason instead of inventing an
+  outcome. A deployment with a real charge transport passes one in and the same path executes.
+- **There is no default dispatcher that succeeds.** `UndeliveredDispatcher` returns False and
+  records what the agent *wanted* to send. A message logged as delivered when no transport
+  exists is a fabricated fact entering through the path labelled real.
+- **Time is real.** Future actions are held and run by `due(now)`, so a five-day ladder does
+  not fire at once on receipt.
+
+State is in memory, which is a real limitation and is stated rather than hidden: a restart
+forgets which subjects are mid-ladder. The audit log holds everything needed to rebuild it.
+
+### D56. Detection exists (closes D48)
+
+`RazorpayReadClient` adds the list queries the rail never had, and `scan()` covers all three
+surfaces the track's brief names. Against the live account it found ₹3,497 at risk across
+three abandoned checkouts on the first run.
+
+**The `attempts` field is the finding.** Razorpay gives away a cause signal for free: an order
+with `attempts=0` is a customer who never tried, and one with `attempts=3` is a customer who
+tried and was declined three times. Those are different problems wanting different answers,
+which is this product's thesis applied to a second surface. So:
+
+- attempts > 0 → fetch the failed payments, take the most recent, and convert it into a
+  `FailureEvent` carrying the real `error_reason`/`error_source`/`error_step`. The existing
+  classifier handles it unchanged.
+- attempts = 0 → **`actionable=False`, and no failure class is assigned.** Nobody declined
+  anything. The intervention an abandoned cart wants is a different menu from the one built
+  here, and shoehorning it into a decline taxonomy would be the exact fabrication this
+  codebase keeps refusing.
+
+Overdue receivables are detected and reported the same honest way: found, priced at the unpaid
+balance, and marked unhandled because no reminder ladder for them exists yet.
+
+Everything in the read client is a GET, and a test asserts the module contains no write verb —
+detection is meant to run on a schedule against a live account, so it should be safe without
+anyone reading the code to be sure.
+
+### D57. The live path immediately found a bug the simulation could not
+
+`Executor._perform` discarded the dispatcher's return value for
+`REQUEST_INSTRUMENT_UPDATE`. `SimulatedDispatcher` always succeeds, so in simulation this
+never showed. Against a live transport it meant a customer could be recorded as having
+updated their card *in response to a message that was never sent* — conversion attributed to a
+request that did not arrive.
+
+Found by a live-agent test within an hour of the live path existing, which is the argument for
+building it: a second caller with different assumptions is a better test of shared code than
+another unit test written by the same person who wrote the first one.
+
+### D50 progress: the error-card walk
+
+`scripts/error_card_walk.py --create` opens one order per published error-scenario card and
+prints a page to pay them from; `--verify` fetches whatever arrived and runs it through the
+real classifier, printing Razorpay's reason against Recoup's class. It asserts nothing about
+what *should* happen — if a card produces a different string than documented, the table is the
+finding. That matters for one card in particular: Razorpay's test-card table says
+`insufficient_fund` while its error reference says `insufficient_funds`, and the taxonomy maps
+the plural.
+
+Eight orders are created and waiting. The clicking is a human's job, so this is tooling for a
+gap rather than the gap closed.
+
 ### Still open
 
-- **No real Razorpay decline has ever reached the classifier as anything but ambiguous.** The
-  error-scenario cards in D50 are the way to fix that with real data.
-- **The live path still does not run the agent** (D47), and **detection still does not exist**
-  (D48).
+- **The error-card walk needs a human to pay the eight cards.** Until then no real Razorpay
+  decline has reached the classifier as anything but ambiguous.
+- **`LiveAgent` state does not survive a restart.** The audit log has what a reconstruction
+  needs; nothing reads it back yet.
+- **Abandoned carts and overdue receivables are detected but not acted on.** Both need their
+  own intervention menu and their own budgets.
 - **Contact fatigue is unpriced**, and **cost constants remain declared assumptions**.
 - **The live path does not run the agent** (D47). One argument would join the halves.
 - **Detection does not exist** (D48). Three list queries would open all three risk surfaces
