@@ -218,11 +218,25 @@ python -m scripts.error_card_walk --verify   # classify whatever actually arrive
 
 ## Honesty about what is simulated
 
-Razorpay test mode offers only *Charge as Success* and *Charge as Failure* from
-the Dashboard for subscription invoices, and it exposes no manual-retry API for
-domestic cards. It *can* inject specific decline reasons on the order checkout
-path, via published error-scenario test cards — an earlier version of this
-README said otherwise, following spike finding F1, and F1 was too strong.
+Razorpay test mode cannot inject a specific decline reason, and it exposes no
+manual-retry API for domestic cards.
+
+That first claim is now measured rather than assumed. Razorpay publishes eight
+error-scenario test cards documented to produce distinct error codes. **All eight
+were paid, each card confirmed by `last4`, and every one returned the identical
+generic result:**
+
+```
+error_reason  payment_failed    error_source  gateway
+error_step    payment_authorization           "Payment failed"
+```
+
+Eight documented scenarios, one indistinguishable string —
+[`evidence/error-card-walk.md`](evidence/error-card-walk.md), reproducible via
+`python -m scripts.error_card_walk --verify`. A classifier cannot be exercised
+against real declines that carry no cause, which is exactly why the cohort
+injects a 25-reason mix and why the live rail's `charge()` raises rather than
+returning a plausible number.
 
 So **recovery outcomes are simulated** against published dunning benchmarks,
 declared in the report, and swept across three probability bands. The real

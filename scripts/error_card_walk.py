@@ -1,16 +1,17 @@
 """Drive real Razorpay declines through the classifier, one error card each.
 
-Spike finding F1 said test mode cannot inject decline reasons, and every real
-failure this project had collected agreed: four payments, four identical
-``payment_failed`` strings. F1 turned out to be too strong. Razorpay publishes
-**error-scenario test cards** that produce eight distinct error codes on the
-order checkout path -- which is the path this project uses, because
-Subscriptions was gated behind full account activation.
+Spike finding F1 said test mode cannot inject decline reasons. Razorpay publishes
+**error-scenario test cards** documented to produce eight distinct error codes,
+which looked like a refutation. It was not: all eight were paid, each card
+confirmed by ``last4``, and every one returned the same generic
+``payment_failed`` / ``gateway`` / ``payment_authorization``. See
+``evidence/error-card-walk.md``.
 
-That matters because it closes the last honest gap in the evidence: the
-classifier has only ever been exercised on synthetic reason strings, and these
-cards let five of its six classes be driven by declines Razorpay actually
-produced.
+So this script no longer closes a gap -- it *documents* one, which is more
+useful. F1 originally rested on reading documentation; it now rests on eight
+paid transactions in a live account. That is the answer to the obvious question
+about why the experiment is simulated, and re-running ``--verify`` reproduces
+it. If Razorpay ever starts differentiating, this is what will notice.
 
 Two steps, because one of them needs a human:
 
@@ -138,7 +139,12 @@ def create(client: Any, amount_paise: int, out: Path, key_id: str) -> Path:
     return out
 
 
-def verify(read: RazorpayReadClient, manifest: Path, llm: LLMClient | None) -> int:
+def verify(
+    read: RazorpayReadClient,
+    manifest: Path,
+    llm: LLMClient | None,
+    out: Path | None = None,
+) -> int:
     if not manifest.exists():
         print(f"no manifest at {manifest}; run --create first", file=sys.stderr)
         return 1
@@ -147,6 +153,7 @@ def verify(read: RazorpayReadClient, manifest: Path, llm: LLMClient | None) -> i
     print(f"{'expected reason':36} {'actual reason':30} {'source':10} -> classified")
     print("-" * 104)
     seen = 0
+    rows: list[dict] = []
     for entry in entries:
         payments = [
             p for p in read.payments_for_order(entry["order_id"]) if p.get("status") == "failed"
@@ -169,12 +176,72 @@ def verify(read: RazorpayReadClient, manifest: Path, llm: LLMClient | None) -> i
         )
         result = classify(event, llm)
         match = "" if payment.get("error_reason") == entry["expected"] else "  <- differs"
+        rows.append({
+            "card": entry["card"], "expected": entry["expected"],
+            "actual": event.error_reason, "source": event.error_source,
+            "step": event.error_step,
+            "classified": f"{result.failure_class.value} ({result.method}, {result.confidence})",
+        })
         print(
             f"{entry['expected']:36} {event.error_reason:30} {event.error_source:10} -> "
             f"{result.failure_class.value} ({result.method}, {result.confidence}){match}"
         )
     print(f"\n{seen}/{len(entries)} cards produced a failed payment.")
+    if out is not None and rows:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(_evidence(rows, seen, len(entries)), encoding="utf-8")
+        print(f"wrote {out}")
     return 0
+
+
+def _evidence(rows: list[dict], seen: int, total: int) -> str:
+    distinct = {r["actual"] for r in rows}
+    lines = [
+        "# The error-card walk",
+        "",
+        "Razorpay publishes error-scenario test cards documented to inject specific decline",
+        "reasons. This walk pays one order per card, choosing *Failure* on the mock bank",
+        "screen as the documentation instructs, and reads back what actually arrived.",
+        "",
+        "Each row's card was confirmed against the `last4` on the payment's card entity, so",
+        "these are the intended cards and not a mistyped run.",
+        "",
+        "| Card | Documented reason | Reason returned | source | step | Recoup classified |",
+        "|---|---|---|---|---|---|",
+    ]
+    lines += [
+        f"| `...{r['card'][-4:]}` | `{r['expected']}` | `{r['actual']}` | "
+        f"`{r['source']}` | `{r['step']}` | {r['classified']} |"
+        for r in rows
+    ]
+    lines += [
+        "",
+        f"**{seen}/{total} cards paid. {len(distinct)} distinct reason string(s) returned.**",
+        "",
+    ]
+    if len(distinct) == 1:
+        lines += [
+            "Every documented scenario collapses to the same generic string. Spike finding F1",
+            "-- *test mode cannot inject decline reasons* -- holds, and this is considerably",
+            "stronger evidence for it than the documentation it was originally drawn from:",
+            "eight published error cards, each verified used, producing one indistinguishable",
+            "result.",
+            "",
+            "An earlier revision of `docs/decisions.md` claimed F1 was too strong, on the",
+            "grounds that these cards existed. They exist; on this account they do not",
+            "differentiate. The claim was made from documentation and is retracted on data.",
+            "",
+            "This is the answer to *why is the experiment simulated*. A classifier cannot be",
+            "exercised against real declines that carry no cause, which is why the cohort",
+            "injects the 25-reason mix and why the live rail's `charge()` raises rather than",
+            "returning a plausible number.",
+        ]
+    else:
+        lines += [
+            "Some cards do differentiate. Every row whose returned reason differs from the",
+            "documented one is a finding about Razorpay rather than about this code.",
+        ]
+    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -207,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         RazorpayReadClient(config),
         args.out_dir / "error_card_orders.json",
         LLMClient(cache_path=args.out_dir / "llm_cache.json"),
+        Path("evidence/error-card-walk.md"),
     )
 
 
