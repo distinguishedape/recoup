@@ -8,6 +8,7 @@ anything about the configuration changed in between.
 """
 
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from recoup.experiment.sweep import run_sweep
 from recoup.llm.client import LLMClient
 from recoup.models.enums import Band
 from recoup.orchestrate.runner import RunConfig
+from recoup.razorpay.config import load_dotenv
 from recoup.report.render import write_bundle
 
 
@@ -32,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="refuse to run if the config changed")
     parser.add_argument("--no-llm", action="store_true",
                         help="run with the deterministic planner only")
+    parser.add_argument("--allow-fallback", action="store_true",
+                        help="publish even if some prompts never reached a model")
     parser.add_argument("--replicate", default="",
                         help="comma-separated extra seeds; a finding replicates only if it "
                              "survives the band sweep in every cohort")
@@ -51,6 +55,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.verify_frozen:
         print(f"configuration verified unchanged: {verify_frozen_config(config, frozen_path)}")
 
+    # Without this the runner sees no API key, every cache miss falls back to
+    # UNCLASSIFIED, and the "with model" arm quietly becomes a partial one. An
+    # entire evidence bundle was published that way: 930 of 1542 ambiguous
+    # classifications never reached a model, and nothing said so.
+    for key, value in load_dotenv().items():
+        os.environ.setdefault(key, value)
+
     client = None if args.no_llm else LLMClient(args.out_dir / "llm_cache.json")
     sweep = run_sweep(config, args.out_dir / "audit", client)
 
@@ -58,6 +69,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.replicate:
         seeds = [args.seed] + [int(s) for s in args.replicate.split(",") if s.strip()]
         replication = run_replication(config, seeds, args.out_dir / "replication", client)
+
+    if client is not None and client.unserved and not args.allow_fallback:
+        print(
+            f"refusing to write the bundle: {client.unserved} prompts reached neither "
+            "the cache nor a model, so those subjects were classified by fallback "
+            "rather than by the model this run claims to measure.\n"
+            "Configure a provider key to fill the cache, or pass --allow-fallback "
+            "to publish a deliberately degraded run.",
+            file=sys.stderr,
+        )
+        return 1
 
     written = write_bundle(sweep, args.out_dir, replication)
 

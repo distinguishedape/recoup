@@ -7,9 +7,9 @@ Cohort of 2000 failed subscription charges, seed 3, configuration hash `7aa7962c
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹18,35,622.00 | ₹13,902.00 | ₹18,21,720.00 | 46.0% | 5.28 | 1782 | 34.7h |
-| Recoup | ₹21,18,484.00 | ₹9,864.60 | ₹21,08,619.40 | 53.2% | 3.12 | 2 | 39.2h |
+| Recoup | ₹20,85,999.00 | ₹9,362.10 | ₹20,76,636.90 | 52.4% | 3.00 | 3 | 39.4h |
 
-Gross lift ₹2,82,862.00 - net lift ₹2,86,899.40 - recovery rate +7.2pp - wasted attempts avoided 1780.
+Gross lift ₹2,50,377.00 - net lift ₹2,54,916.90 - recovery rate +6.4pp - wasted attempts avoided 1779.
 
 ## Where the lift comes from
 
@@ -17,12 +17,12 @@ Gross recovered per failure cause, both arms. A total is easy to take on trust; 
 
 | Cause | Baseline | Recoup | Difference |
 |---|---|---|---|
-| `INSUFFICIENT_FUNDS` | ₹10,05,017.00 | ₹7,95,618.00 | **-₹2,09,399.00** |
-| `INSTRUMENT_INVALID` | ₹11,996.00 | ₹2,43,884.00 | **₹2,31,888.00** |
+| `INSUFFICIENT_FUNDS` | ₹10,05,017.00 | ₹10,82,483.00 | **₹77,466.00** |
+| `INSTRUMENT_INVALID` | ₹11,996.00 | ₹2,11,399.00 | **₹1,99,403.00** |
 | `MANDATE_REVOKED` | ₹0.00 | ₹0.00 | ₹0.00 |
-| `TRANSIENT_ISSUER` | ₹5,34,742.00 | ₹4,61,274.00 | **-₹73,468.00** |
+| `TRANSIENT_ISSUER` | ₹5,34,742.00 | ₹5,04,252.00 | **-₹30,490.00** |
 | `RISK_DECLINE` | ₹499.00 | ₹0.00 | -₹499.00 |
-| `UNCLASSIFIED` | ₹2,83,368.00 | ₹6,17,708.00 | **₹3,34,340.00** |
+| `UNCLASSIFIED` | ₹2,83,368.00 | ₹2,87,865.00 | **₹4,497.00** |
 
 ## How far up the ladder subjects travelled
 
@@ -30,18 +30,18 @@ Recovered money by the escalation tier that achieved it. The baseline has no lad
 
 | Tier | Baseline | Recoup |
 |---|---|---|
-| T1 notify | ₹18,35,622.00 | ₹18,74,600.00 |
-| T2 request action | ₹0.00 | ₹2,43,884.00 |
+| T1 notify | ₹18,35,622.00 | ₹17,83,136.00 |
+| T2 request action | ₹0.00 | ₹3,02,863.00 |
 
 ## Findings across the sensitivity sweep
 
 | Finding | Low | Mid | High | Verdict | Note |
 |---|---|---|---|---|---|
-| gross_recovered | ₹1,85,408.00 | ₹2,82,862.00 | ₹3,60,313.00 | **survives** | holds at every band |
-| net_recovered | ₹1,89,639.20 | ₹2,86,899.40 | ₹3,64,243.80 | **survives** | holds at every band |
-| recovery_rate | +4.8pp | +7.2pp | +9.8pp | **survives** | holds at every band |
-| attempts_per_recovery | -2.84 | -2.16 | -1.81 | **survives** | holds at every band |
-| wasted_attempts | +1796.00 | +1780.00 | +1753.00 | **survives** | holds at every band |
+| gross_recovered | ₹1,60,417.00 | ₹2,50,377.00 | ₹3,35,330.00 | **survives** | holds at every band |
+| net_recovered | ₹1,65,137.25 | ₹2,54,916.90 | ₹3,39,771.80 | **survives** | holds at every band |
+| recovery_rate | +4.3pp | +6.4pp | +8.9pp | **survives** | holds at every band |
+| attempts_per_recovery | -2.99 | -2.28 | -1.92 | **survives** | holds at every band |
+| wasted_attempts | +1796.00 | +1779.00 | +1754.00 | **survives** | holds at every band |
 
 A finding is reported as surviving only if it points the right way at **all three** bands. A lift that appears only at the High band is reported as not surviving, however large it is.
 
@@ -51,11 +51,11 @@ The same experiment run over 4 independent cohorts of 2000 subjects each. A find
 
 | Finding | seed 3 | seed 11 | seed 29 | seed 47 | mean | Verdict |
 |---|---|---|---|---|---|---|
-| gross_recovered | ₹2,82,862.00 | ₹3,27,852.00 | ₹3,14,358.00 | ₹2,33,374.00 | ₹2,89,611.50 | **replicates** |
-| net_recovered | ₹2,86,899.40 | ₹3,31,819.00 | ₹3,18,410.80 | ₹2,37,187.20 | ₹2,93,579.10 | **replicates** |
-| recovery_rate | +7.2pp | +7.8pp | +7.5pp | +6.6pp | +7.3pp | **replicates** |
-| attempts_per_recovery | -2.16 | -2.20 | -2.11 | -1.94 | -2.10 | **replicates** |
-| wasted_attempts | +1780.00 | +1756.00 | +1773.00 | +1686.00 | +1748.75 | **replicates** |
+| gross_recovered | ₹2,50,377.00 | ₹3,40,842.00 | ₹3,08,365.00 | ₹2,55,368.00 | ₹2,88,738.00 | **replicates** |
+| net_recovered | ₹2,54,916.90 | ₹3,45,371.35 | ₹3,12,885.75 | ₹2,59,659.85 | ₹2,93,208.46 | **replicates** |
+| recovery_rate | +6.4pp | +8.4pp | +7.1pp | +6.9pp | +7.2pp | **replicates** |
+| attempts_per_recovery | -2.28 | -2.41 | -2.23 | -2.10 | -2.26 | **replicates** |
+| wasted_attempts | +1779.00 | +1755.00 | +1773.00 | +1687.00 | +1748.50 | **replicates** |
 
 
 ## Per-band detail
@@ -65,21 +65,21 @@ The same experiment run over 4 independent cohorts of 2000 subjects each. A find
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹14,25,815.00 | ₹14,964.00 | ₹14,10,851.00 | 35.9% | 7.28 | 1797 | 36.5h |
-| Recoup | ₹16,11,223.00 | ₹10,732.80 | ₹16,00,490.20 | 40.7% | 4.44 | 1 | 42.5h |
+| Recoup | ₹15,86,232.00 | ₹10,243.75 | ₹15,75,988.25 | 40.2% | 4.29 | 1 | 42.4h |
 
 ### Mid band
 
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹18,35,622.00 | ₹13,902.00 | ₹18,21,720.00 | 46.0% | 5.28 | 1782 | 34.7h |
-| Recoup | ₹21,18,484.00 | ₹9,864.60 | ₹21,08,619.40 | 53.2% | 3.12 | 2 | 39.2h |
+| Recoup | ₹20,85,999.00 | ₹9,362.10 | ₹20,76,636.90 | 52.4% | 3.00 | 3 | 39.4h |
 
 ### High band
 
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |
 |---|---|---|---|---|---|---|---|
 | Baseline ladder | ₹21,75,966.00 | ₹13,029.00 | ₹21,62,937.00 | 54.2% | 4.20 | 1758 | 33.5h |
-| Recoup | ₹25,36,279.00 | ₹9,098.20 | ₹25,27,180.80 | 64.0% | 2.39 | 5 | 36.5h |
+| Recoup | ₹25,11,296.00 | ₹8,587.20 | ₹25,02,708.80 | 63.1% | 2.28 | 4 | 36.7h |
 
 ## The baseline this was compared against
 

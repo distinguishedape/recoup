@@ -40,13 +40,20 @@ probability bands, four independent cohorts of 2,000 subjects.
 
 | Mid band, n=2000 | Baseline ladder | Recoup | | Spec target |
 |---|---|---|---|---|
-| Gross recovered | ₹18,35,622 | **₹21,18,484** | +15.4% | +10% ✅ |
-| Cost of chasing | ₹13,902 | **₹9,865** | −29% | — |
-| **Net recovered** | ₹18,21,720 | **₹21,08,619** | **+15.7%** | +15% ✅ |
-| Recovery rate | 46.0% | **53.2%** | +7.2pp | +5pp ✅ |
-| Attempts per recovery | 5.28 | **3.12** | −40.9% | −25% ✅ |
-| Wasted attempts | 1,782 | **2** | −99.9% | >90% ✅ |
-| Time to recovery | **34.7h** | 39.2h | +4.5h | — |
+| Gross recovered | ₹18,35,622 | **₹20,85,999** | +13.6% | +10% ✅ |
+| Cost of chasing | ₹13,902 | **₹9,362** | −33% | — |
+| **Net recovered** | ₹18,21,720 | **₹20,76,637** | **+14.0%** | +15% ✗ |
+| Recovery rate | 46.0% | **52.4%** | +6.4pp | +5pp ✅ |
+| Attempts per recovery | 5.28 | **3.00** | −43.2% | −25% ✅ |
+| Wasted attempts | 1,782 | **3** | −99.8% | >90% ✅ |
+| Time to recovery | **34.7h** | 39.4h | +4.7h | — |
+
+**Net recovery misses its target by one point.** An earlier version of this table
+claimed +15.7% and cleared it. That run had no model provider configured, so 60%
+of ambiguous classifications silently fell back to `UNCLASSIFIED` and took the
+generic ladder — which recovers slightly more money at considerably more cost.
+The figures above are from a run where the classifier actually ran. See
+[Two defects in how the evidence was produced](#two-defects-in-how-the-evidence-was-produced).
 
 All five headline findings **replicate in all four cohorts** — a finding counts
 only if it survives the Low/Mid/High sweep in *every* one, not on average.
@@ -62,21 +69,25 @@ Gross recovered per cause, both arms, mid band:
 
 | Cause | Baseline | Recoup | |
 |---|---|---|---|
-| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,43,884** | **+₹2,31,888** |
-| `UNCLASSIFIED` | ₹2,83,368 | **₹6,17,708** | **+₹3,34,340** |
-| `TRANSIENT_ISSUER` | **₹5,34,742** | ₹4,61,274 | −₹73,468 |
-| `INSUFFICIENT_FUNDS` | **₹10,05,017** | ₹7,95,618 | −₹2,09,399 |
+| `INSTRUMENT_INVALID` | ₹11,996 | **₹2,11,399** | **+₹1,99,403** |
+| `INSUFFICIENT_FUNDS` | ₹10,05,017 | **₹10,82,483** | **+₹77,466** |
+| `UNCLASSIFIED` | ₹2,83,368 | **₹2,87,865** | +₹4,497 |
+| `TRANSIENT_ISSUER` | **₹5,34,742** | ₹5,04,252 | −₹30,490 |
+| `RISK_DECLINE` | **₹499** | ₹0 | −₹499 |
 
-Recoup wins decisively where knowing the cause changes what you do, and **loses
-on the two causes an ordinary retry ladder already handles well**. The net is
-strongly positive; it is not a clean sweep, and a total alone would have hidden
-that.
+**Dead cards are where the whole thesis lives: ₹11,996 recovered by the baseline
+against ₹2,11,399 by Recoup**, roughly seventeenfold, because Recoup asks for a
+new card instead of hammering one that cannot work.
 
-Dead cards are the clearest case: **₹11,996 recovered by the baseline against
-₹2,43,884 by Recoup**, roughly twentyfold, because Recoup asks for a new card
-instead of hammering one that cannot work. That result and the near-total
-elimination of wasted attempts held across every version of the model during
-development. They are the claims to trust most.
+It loses on `TRANSIENT_ISSUER` — an outage is the one cause a plain retry ladder
+is already well suited to, and Recoup spends fewer attempts on it by design. And
+it gives up ₹499 on `RISK_DECLINE` on purpose, because that class routes to a
+human rather than arguing with a bank's fraud decision. Neither is a bug; both
+are the cost of a policy that is stated in advance.
+
+That per-cause split and the near-total elimination of wasted attempts held
+across every version of the model during development. They are the claims to
+trust most.
 
 ### What it took to get here, stated plainly
 
@@ -108,10 +119,43 @@ recovery. That number was real, and three things changed between then and now:
    shortfall against targets set in advance, and a reader should weigh them
    knowing that order.
 
-A sceptical reader should know the −2.26% and the +15.7% come from the same
+A sceptical reader should know the −2.26% and the +14.0% come from the same
 codebase at different points, and part of the difference is judgement about what
 the model ought to represent. The two figures in the previous section are the
 ones that survived all of it.
+
+### Two defects in how the evidence was produced
+
+Both were found while building the decision console, after the numbers had
+already been published. Neither was in the pipeline; both were in the harness
+that measures it, which is the harder place to look.
+
+**The experiment ran without a model provider.** `scripts/run_experiment.py`
+never loaded `.env`, so the client resolved no provider and every prompt that
+missed the committed cache raised `LLMUnavailable`. The classifier caught it and
+degraded to `UNCLASSIFIED` at 0.30 confidence, exactly as it should in
+production — which meant **930 of 1,542 ambiguous classifications never reached a
+model**, and the arm labelled "with LLM" was running about 40% connected. The
+degraded run scored *higher*, because `UNCLASSIFIED` subjects get the generic
+ladder and its extra retries. Fixed by loading `.env`; and the runner now refuses
+to write a bundle if any prompt reached neither cache nor model, unless
+`--allow-fallback` is passed. Graceful degradation is right in a live pipeline
+and wrong in a measurement.
+
+**The audit log accumulated across runs.** `run_paired_experiment` opened its
+`AuditLog` on a path that already existed, and an audit log is append-only by
+design. Re-running into the same directory stacked runs on top of each other:
+the published `audit_mid_treatment.csv` held **six runs at once**, 12,000 ingest
+records for a 2,000-subject experiment. Metrics are computed from the in-memory
+result rather than from the export, so the headline numbers were never wrong —
+but the audit trail offered as evidence for them was unreadable. A measurement
+now starts from an empty log.
+
+The classifier is measured now rather than asserted:
+`tests/classify/test_accuracy.py` runs 2,000 cohort events against known truth
+and asserts **84.5% from the lookup table alone, 99.4% with the model**, and
+96.1% on the ambiguous subset the table refuses. It runs from the committed
+cache, so it needs no API key.
 
 ### Two bugs a live model found that 429 tests had not
 

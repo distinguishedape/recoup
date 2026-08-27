@@ -49,6 +49,16 @@ def run_paired_experiment(
     control_path = audit_dir / "control.db"
     treatment_path = audit_dir / "treatment.db"
 
+    # An audit log is append-only, which is right for a log and wrong for the
+    # scratch space of a repeatable measurement: re-running into the same
+    # directory silently stacks runs on top of each other, and the exported CSV
+    # then describes six runs at once. An evidence bundle was published that way.
+    # Metrics come from the in-memory result so they stayed correct; the exported
+    # audit did not. A measurement starts from nothing.
+    for path in (control_path, treatment_path,
+                 audit_dir / "control.jsonl", audit_dir / "treatment.jsonl"):
+        path.unlink(missing_ok=True)
+
     control_audit = AuditLog(control_path, audit_dir / "control.jsonl")
     try:
         control_result = run_control_arm(config, control_audit)

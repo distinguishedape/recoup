@@ -1073,13 +1073,69 @@ precisely the D40 pattern — changing the measurement after seeing what it cost
 0.6%. A ceiling that can be derived from two lines of the generator is better evidence than a
 perfect score obtained by making the test easier.
 
+All of the above is now asserted in `tests/classify/test_accuracy.py` rather than claimed
+here, including a test that fails if the generator is ever edited to make those two classes
+separable — so the decision above cannot be quietly reversed later to buy a better number.
+The tests run against the committed cache with the model name pinned, because cache keys are
+hashed over the model and a client resolving a different one misses every entry and falls
+back silently. That is the same trap as [[D52]], one layer down.
+
+## Phase 12 — Two defects in the harness, found by building a dashboard
+
+Building a console that renders one subject's audit trail is not a measurement task, which is
+exactly why it found these. The console loaded `.env` and the experiment runner did not, and
+the two disagreed about the answer. Chasing that disagreement turned up two defects, neither
+of them in the pipeline and both in the machinery that measures it.
+
+### D52. The experiment ran with the model disconnected
+
+`scripts/run_experiment.py` never called `load_dotenv()`. No provider resolved, so every
+prompt missing from the committed cache raised `LLMUnavailable`, and `resolve()` caught it and
+returned `UNCLASSIFIED` at 0.30 — correct degradation, silently applied to a measurement.
+
+**930 of 1,542 ambiguous classifications never reached a model.** The arm labelled "with LLM"
+was roughly 40% connected, and nothing in the output said so. Confirmed by stripping the keys
+and reproducing the published figure to the paise: `211,848,400`.
+
+The degraded run scored **higher** — ₹21,18,484 against ₹20,85,999 — because an `UNCLASSIFIED`
+subject receives the generic ladder and its extra retries, which recovers marginally more
+money at considerably more cost. So the defect inflated the headline while making the product
+look less like itself.
+
+**Two fixes, because the bug had two halves.** The runner loads `.env`. And `LLMClient` now
+counts prompts it could serve from neither cache nor model, and the experiment refuses to
+write a bundle if that count is non-zero unless `--allow-fallback` is passed explicitly.
+Graceful degradation is right in a live pipeline and wrong in a measurement; the same code
+now behaves correctly in both because the *caller* decides which one it is.
+
+**Consequence for the claims:** net recovered falls from +15.7% to **+14.0% and misses its
++15% target**. Four of five primary metrics still clear. The honest table is in the README.
+
+### D53. The audit log accumulated across runs
+
+`run_paired_experiment` opened `AuditLog` on a path that already existed. An audit log is
+append-only — correct for a log, wrong for the scratch space of a repeatable measurement.
+Re-running into the same directory stacked runs: the published `audit_mid_treatment.csv` held
+**six runs at once**, 12,000 ingest records for a 2,000-subject experiment.
+
+Metrics are computed from the in-memory `RunResult` rather than from the export, so no
+headline number was ever wrong. What was wrong is subtler and worse for a judge: the audit
+trail offered as *evidence* for those numbers described six different experiments
+simultaneously. The append-only property that makes the log trustworthy is what made the
+export useless, and only because a measurement reused a directory a log was never meant to
+share. A measurement now starts from an empty log.
+
+Both defects were invisible to 514 tests, because every test constructs its own audit log in a
+`tmp_path` and its own client with an explicit transport. The tests were right about the units
+and silent about the wiring.
+
 ### Still open
 
-- **The classifier's accuracy has no home in the repo** (D51). It measures 99.4%, but only in
-  a scratch script — there is no test asserting it and no report section publishing it, so the
-  claim is unevidenced where it counts.
 - **No real Razorpay decline has ever reached the classifier as anything but ambiguous.** The
   error-scenario cards in D50 are the way to fix that with real data.
+- **The live path still does not run the agent** (D47), and **detection still does not exist**
+  (D48).
+- **Contact fatigue is unpriced**, and **cost constants remain declared assumptions**.
 - **The live path does not run the agent** (D47). One argument would join the halves.
 - **Detection does not exist** (D48). Three list queries would open all three risk surfaces
   the track's problem statement names.

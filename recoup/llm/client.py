@@ -59,6 +59,13 @@ class LLMClient:
             model_for(self.provider, environment) if self.provider else DEFAULT_MODEL
         )
         self.calls = 0
+        self.unserved = 0
+        """Prompts that could be neither answered from cache nor sent to a model.
+
+        Every one of these is a caller that fell back to a degraded answer. In a
+        live pipeline that is correct behaviour. In an experiment it means the
+        run measured something other than what it claims to measure, so the
+        experiment runner refuses to publish a bundle with any."""
         self._cache_path = Path(cache_path)
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._cache: dict[str, str] = {}
@@ -85,6 +92,11 @@ class LLMClient:
         if key in self._cache:
             return self._cache[key]
         if self._transport is None:
+            # Counted, not just raised. Callers degrade gracefully on an
+            # unavailable model -- which is right in production and wrong in a
+            # measurement, where it silently turns the model arm into a partial
+            # one. The count is what lets an experiment refuse to publish.
+            self.unserved += 1
             raise LLMUnavailable(
                 "no model provider is configured and no cached response for this "
                 "prompt. Set one of GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, "
