@@ -1,0 +1,389 @@
+<meta charset="utf-8">
+<title>Recoup Decision Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+:root{
+  --paper:#F4F6F4; --surface:#FFFFFF; --sunk:#EAEEEC;
+  --ink:#141A19; --ink-2:#4A5654; --ink-3:#77837F;
+  --line:#DCE3E0; --line-2:#C6D0CC;
+  --rail:#0B6E63; --rail-soft:#E2F0ED;
+  --gold:#8A6516; --good:#2E6B4C; --hold:#8A6516; --halt:#A03A2C;
+  --shadow:0 1px 2px rgba(20,26,25,.05),0 8px 24px -12px rgba(20,26,25,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1312; --surface:#141C1B; --sunk:#101817;
+    --ink:#E4EBE8; --ink-2:#9DACA8; --ink-3:#6F7E7A;
+    --line:#233130; --line-2:#2E403E;
+    --rail:#4FC3B4; --rail-soft:#122B28;
+    --gold:#D2A24C; --good:#5FA87E; --hold:#D2A24C; --halt:#D9705E;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1312; --surface:#141C1B; --sunk:#101817;
+  --ink:#E4EBE8; --ink-2:#9DACA8; --ink-3:#6F7E7A;
+  --line:#233130; --line-2:#2E403E;
+  --rail:#4FC3B4; --rail-soft:#122B28;
+  --gold:#D2A24C; --good:#5FA87E; --hold:#D2A24C; --halt:#D9705E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.serif{font-family:"Instrument Serif",Georgia,serif;font-weight:400;letter-spacing:.01em}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.eyebrow{
+  font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);
+}
+
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between;
+  padding-bottom:22px;border-bottom:1px solid var(--line)}
+.brand{display:flex;flex-direction:column;gap:6px}
+.brand h1{font-size:40px;line-height:1.05}
+.brand p{margin:0;color:var(--ink-2);max-width:56ch}
+.stamp{font-size:12px;color:var(--ink-3);text-align:right;line-height:1.7}
+.stamp b{color:var(--ink-2);font-weight:500}
+
+/* ---------- loop ---------- */
+.loop{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:26px 0 34px}
+.loop .node{
+  display:flex;flex-direction:column;gap:1px;padding:9px 14px;border:1px solid var(--line);
+  border-radius:3px;background:var(--surface);min-width:112px;
+}
+.loop .node b{font-size:12.5px;font-weight:600}
+.loop .node span{font-size:11px;color:var(--ink-3)}
+.loop .node.gate{border-color:var(--rail);background:var(--rail-soft)}
+.loop .arw{color:var(--ink-3);font-size:13px}
+
+/* ---------- tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.tile{background:var(--surface);padding:18px 18px 16px;display:flex;flex-direction:column;gap:3px}
+.tile .k{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.tile .v{font-size:30px;line-height:1.15;font-variant-numeric:tabular-nums}
+.tile .base{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.tile .d{font-size:12.5px;font-weight:600;color:var(--good)}
+.tile .d.neg{color:var(--halt)}
+
+/* ---------- section ---------- */
+section{margin-top:52px}
+.shead{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
+.shead h2{font-size:27px;line-height:1.15}
+.shead p{margin:0;color:var(--ink-2);max-width:70ch}
+
+/* ---------- case picker ---------- */
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:8px;margin-bottom:20px}
+.case{
+  text-align:left;font:inherit;cursor:pointer;padding:11px 13px;border-radius:3px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  display:flex;flex-direction:column;gap:3px;transition:border-color .13s,background .13s;
+}
+.case:hover{border-color:var(--line-2)}
+.case:focus-visible{outline:2px solid var(--rail);outline-offset:2px}
+.case[aria-pressed="true"]{border-color:var(--rail);background:var(--rail-soft)}
+.case b{font-size:13.5px;font-weight:600}
+.case span{font-size:11px;color:var(--ink-3)}
+.case[aria-pressed="true"] span{color:var(--ink-2)}
+
+.blurb{margin:0 0 18px;color:var(--ink-2);max-width:72ch}
+
+/* ---------- trace ---------- */
+.columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.columns{grid-template-columns:1fr}}
+.col{border:1px solid var(--line);border-radius:4px;background:var(--surface);
+  display:flex;flex-direction:column;overflow:hidden}
+.col > h3{
+  display:flex;align-items:baseline;gap:9px;padding:12px 15px;border-bottom:1px solid var(--line);
+  background:var(--sunk);font-size:13.5px;font-weight:600;
+}
+.col > h3 em{font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);margin-left:auto}
+.col.agent > h3{color:var(--rail)}
+.steps{display:flex;flex-direction:column;padding:4px 0}
+.step{display:grid;grid-template-columns:52px 1fr;gap:11px;padding:9px 15px;
+  border-bottom:1px solid var(--line);align-items:start}
+.step:last-child{border-bottom:none}
+.step .clk{font-size:11px;color:var(--ink-3);padding-top:3px;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",monospace}
+.step .body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tagrow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tag{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 6px;border-radius:2px;background:var(--sunk);color:var(--ink-3);
+  border:1px solid var(--line)}
+.tag.rail{color:var(--rail);border-color:var(--rail);background:var(--rail-soft)}
+.tag.hold{color:var(--hold);border-color:var(--hold);background:transparent}
+.tag.good{color:var(--good);border-color:var(--good);background:transparent}
+.tag.halt{color:var(--halt);border-color:var(--halt);background:transparent}
+.step .t{font-size:13.5px;font-weight:600;line-height:1.4}
+.step .d{font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.step .d code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+  background:var(--sunk);padding:1px 4px;border-radius:2px}
+.acts{display:flex;flex-direction:column;gap:4px;margin-top:3px}
+.act{display:grid;grid-template-columns:auto 1fr;gap:8px;font-size:12px;color:var(--ink-2);
+  border-left:2px solid var(--line-2);padding-left:9px}
+.act b{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;color:var(--ink-3);white-space:nowrap}
+.sup{border-left:2px solid var(--halt);padding:5px 9px;margin-top:4px;font-size:12px;color:var(--ink-2)}
+.sup b{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--halt);font-weight:600}
+.sup q{font-style:italic}
+
+/* ---------- causes ---------- */
+.bars{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);
+  border-radius:4px;background:var(--surface);padding:16px 18px}
+.bar{display:grid;grid-template-columns:170px 1fr 108px;gap:14px;align-items:center;padding:6px 0}
+.bar .nm{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
+.track{position:relative;height:19px;background:linear-gradient(var(--sunk),var(--sunk)) no-repeat center/100% 1px}
+.track i{position:absolute;top:2px;bottom:2px;border-radius:1px;display:block}
+.track i.pos{background:var(--rail)}
+.track i.neg{background:var(--halt);opacity:.62}
+.track u{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--line-2)}
+.bar .amt{text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums;font-weight:600}
+.bar .amt.pos{color:var(--rail)} .bar .amt.neg{color:var(--halt)}
+.legend{font-size:12px;color:var(--ink-3);margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+
+/* ---------- deploy ---------- */
+.deploy{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.dstep{background:var(--surface);padding:17px 18px;display:flex;flex-direction:column;gap:6px}
+.dstep .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--rail);font-weight:600}
+.dstep h4{margin:0;font-size:14px;font-weight:600}
+.dstep p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.55}
+.dstep code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:var(--sunk);
+  padding:1px 4px;border-radius:2px;word-break:break-word}
+footer{margin-top:46px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:6px 18px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="brand">
+    <span class="eyebrow">Razorpay AI Buildathon &middot; Track 03</span>
+    <h1 class="serif">Recoup Decision Console</h1>
+    <p>An agent that reads <em>why</em> a subscription charge failed, picks the intervention
+       that matches that cause, and executes inside limits it cannot talk its way past.</p>
+  </div>
+  <div class="stamp mono" id="stamp"></div>
+</header>
+
+<div class="loop" id="loop"></div>
+
+<div class="tiles" id="tiles"></div>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">The part a metrics table cannot show</span>
+    <h2 class="serif">Watch it decide</h2>
+    <p>Six real subjects from the same run. On the left is what Recoup did and why; on the
+       right is what the baseline retry ladder did to the <em>same</em> subject, from the
+       same failure. Every line is read back out of the audit log.</p>
+  </div>
+  <div class="cases" id="cases"></div>
+  <p class="blurb" id="blurb"></p>
+  <div class="columns" id="cols"></div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Where the money comes from</span>
+    <h2 class="serif">It does not win everywhere</h2>
+    <p>Gross recovered per cause, against the baseline. Two causes go backwards, and a
+       headline total would have hidden that.</p>
+  </div>
+  <div class="bars" id="bars"></div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Running it against your own account</span>
+    <h2 class="serif">How this drops into a live stack</h2>
+    <p>The engine below the ingest layer knows nothing about Razorpay. Four things change
+       when it moves from this harness to a real merchant.</p>
+  </div>
+  <div class="deploy">
+    <div class="dstep"><span class="n">01</span><h4>Point a webhook at it</h4>
+      <p>Serve <code>recoup.ingest.webhook_app</code>, register the URL against
+         <code>subscription.pending</code> and <code>payment.failed</code>, and set
+         <code>RAZORPAY_WEBHOOK_SECRET</code>. Signatures are verified against the raw
+         bytes before the body is parsed.</p></div>
+    <div class="dstep"><span class="n">02</span><h4>Hand it a sink</h4>
+      <p><code>create_app(config, audit, sink=...)</code>. The sink is what runs classify,
+         plan, gate and execute on each event. Without it the receiver only writes to the
+         audit log &mdash; which is exactly what the demo build does today.</p></div>
+    <div class="dstep"><span class="n">03</span><h4>Swap the rail</h4>
+      <p>Recovery outcomes come from <code>SimulatedRail</code>. Replace it with your own
+         charge and messaging transport. <code>RazorpayTestRail.charge()</code> deliberately
+         raises rather than return a plausible number, so nothing simulated can enter
+         through a path labelled real.</p></div>
+    <div class="dstep"><span class="n">04</span><h4>Set your own limits</h4>
+      <p>Contact window, minimum gap, per-cause budgets and the template allowlist are
+         constants in <code>recoup/policy/rules.py</code> and
+         <code>recoup/plan/budgets.py</code>. Nothing downstream can bypass them: an
+         action is only executable as an <code>AuthorizedAction</code>, and that type can
+         only be constructed inside the policy engine.</p></div>
+  </div>
+</section>
+
+<footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = {"meta":{"seed":3,"cohort":2000,"band":"mid","generated":"27 Aug 2026"},"cases":{"funds":{"id":"sub_0000","title":"A shortfall","blurb":"Money will arrive; the question is when. This is the cause the baseline ladder already handles reasonably well.","treatment":{"outcome":{"subscription_id":"sub_0000","failure_class":"INSUFFICIENT_FUNDS","terminal":"recovered","gross_recovered_paise":99900,"cost_paise":620,"actions_executed":3,"charge_attempts":2,"actions_blocked":1,"first_failure_at":"2026-08-26T02:45:28.252780Z","recovered_at":"2026-08-29T02:45:28.252780Z","recovered_at_tier":1},"trace":[{"t":"2026-08-26T02:45:28.252780+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"insufficient_funds","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0000","invoice_id":"inv_0000","occurred_at":"2026-08-26T02:45:28.252780Z","source":"cohort","subscription_id":"sub_0000"}},{"t":"2026-08-26T02:45:28.252780+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"INSUFFICIENT_FUNDS","method":"table","rationale":"reason string 'insufficient_funds' maps directly to this class"}},{"t":"2026-08-26T02:45:28.252780+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0000:act:0","channel":"email","free_text":null,"reason":"tell the customer the debit failed for funds so they can top up before the retry","scheduled_at":"2026-08-26T02:45:28.252780Z","subscription_id":"sub_0000","suppressed_free_text":null,"template_id":"t1_notify_email","tier":1,"type":"send_message"},{"action_id":"sub_0000:act:1","channel":null,"free_text":null,"reason":"retry 24h later, when a salary or transfer may have landed","scheduled_at":"2026-08-27T02:45:28.252780Z","subscription_id":"sub_0000","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0000:act:2","channel":null,"free_text":null,"reason":"retry 72h later, when a salary or transfer may have landed","scheduled_at":"2026-08-29T02:45:28.252780Z","subscription_id":"sub_0000","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0000:act:3","channel":null,"free_text":null,"reason":"retry 120h later, when a salary or transfer may have landed","scheduled_at":"2026-08-31T02:45:28.252780Z","subscription_id":"sub_0000","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"}],"failure_class":"INSUFFICIENT_FUNDS"}},{"t":"2026-08-26T02:45:28.252780+00:00","stage":"execute","payload":{"action_id":"sub_0000:act:0","action_reason":"tell the customer the debit failed for funds so they can top up before the retry","action_type":"send_message","channel":"email","cost_paise":20,"detail":"message t1_notify_email delivered=True","succeeded":true,"template_id":"t1_notify_email","tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-27T02:45:28.252780+00:00","stage":"execute","payload":{"action_id":"sub_0000:act:1","action_reason":"retry 24h later, when a salary or transfer may have landed","action_type":"retry_charge","channel":null,"cost_paise":300,"detail":"charge declined: insufficient_funds","succeeded":false,"template_id":null,"tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-29T02:45:28.252780+00:00","stage":"execute","payload":{"action_id":"sub_0000:act:2","action_reason":"retry 72h later, when a salary or transfer may have landed","action_type":"retry_charge","channel":null,"cost_paise":300,"detail":"charge succeeded","succeeded":true,"template_id":null,"tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-31T02:45:28.252780+00:00","stage":"ladder_block","payload":{"action_id":"sub_0000:act:3","detail":"no further action is warranted for this subject","rule":"recovered"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":620,"failure_class":"INSUFFICIENT_FUNDS","gross_recovered_paise":99900,"terminal":"recovered"}}]},"control":{"outcome":{"subscription_id":"sub_0000","failure_class":"INSUFFICIENT_FUNDS","terminal":"recovered","gross_recovered_paise":99900,"cost_paise":600,"actions_executed":2,"charge_attempts":2,"actions_blocked":0,"first_failure_at":"2026-08-26T02:45:28.252780Z","recovered_at":"2026-08-28T02:45:28.252780Z","recovered_at_tier":1},"trace":[{"t":"2026-08-26T02:45:28.252780+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"insufficient_funds","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0000","invoice_id":"inv_0000","occurred_at":"2026-08-26T02:45:28.252780Z","source":"cohort","subscription_id":"sub_0000"}},{"t":"2026-08-27T02:45:28.252780+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge declined: insufficient_funds","succeeded":false}},{"t":"2026-08-28T02:45:28.252780+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":2,"cost_paise":300,"detail":"charge succeeded","succeeded":true}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":600,"failure_class":"INSUFFICIENT_FUNDS","gross_recovered_paise":99900,"terminal":"recovered"}}]}},"transient":{"id":"sub_0001","title":"Somebody else's outage","blurb":"The best failures to hold. Retry fast and quietly -- no message, because nothing is wrong on the customer's side.","treatment":{"outcome":{"subscription_id":"sub_0001","failure_class":"TRANSIENT_ISSUER","terminal":"recovered","gross_recovered_paise":49900,"cost_paise":300,"actions_executed":1,"charge_attempts":1,"actions_blocked":2,"first_failure_at":"2026-08-26T14:04:07.598808Z","recovered_at":"2026-08-27T02:04:07.598808Z","recovered_at_tier":1},"trace":[{"t":"2026-08-26T14:04:07.598808+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"bank_cutoff_in_progress","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0001","invoice_id":"inv_0001","occurred_at":"2026-08-26T14:04:07.598808Z","source":"cohort","subscription_id":"sub_0001"}},{"t":"2026-08-26T14:04:07.598808+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"TRANSIENT_ISSUER","method":"table","rationale":"reason string 'bank_cutoff_in_progress' maps directly to this class"}},{"t":"2026-08-26T14:04:07.598808+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0001:act:0","channel":null,"free_text":null,"reason":"issuer-side technical failure; retry 12h later without bothering the customer","scheduled_at":"2026-08-27T02:04:07.598808Z","subscription_id":"sub_0001","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0001:act:1","channel":null,"free_text":null,"reason":"issuer-side technical failure; retry 24h later without bothering the customer","scheduled_at":"2026-08-27T14:04:07.598808Z","subscription_id":"sub_0001","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0001:act:2","channel":null,"free_text":null,"reason":"issuer-side technical failure; retry 48h later without bothering the customer","scheduled_at":"2026-08-28T14:04:07.598808Z","subscription_id":"sub_0001","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"}],"failure_class":"TRANSIENT_ISSUER"}},{"t":"2026-08-27T02:04:07.598808+00:00","stage":"execute","payload":{"action_id":"sub_0001:act:0","action_reason":"issuer-side technical failure; retry 12h later without bothering the customer","action_type":"retry_charge","channel":null,"cost_paise":300,"detail":"charge succeeded","succeeded":true,"template_id":null,"tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-27T14:04:07.598808+00:00","stage":"ladder_block","payload":{"action_id":"sub_0001:act:1","detail":"no further action is warranted for this subject","rule":"recovered"}},{"t":"2026-08-28T14:04:07.598808+00:00","stage":"ladder_block","payload":{"action_id":"sub_0001:act:2","detail":"no further action is warranted for this subject","rule":"recovered"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":300,"failure_class":"TRANSIENT_ISSUER","gross_recovered_paise":49900,"terminal":"recovered"}}]},"control":{"outcome":{"subscription_id":"sub_0001","failure_class":"TRANSIENT_ISSUER","terminal":"recovered","gross_recovered_paise":49900,"cost_paise":300,"actions_executed":1,"charge_attempts":1,"actions_blocked":0,"first_failure_at":"2026-08-26T14:04:07.598808Z","recovered_at":"2026-08-27T14:04:07.598808Z","recovered_at_tier":1},"trace":[{"t":"2026-08-26T14:04:07.598808+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"bank_cutoff_in_progress","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0001","invoice_id":"inv_0001","occurred_at":"2026-08-26T14:04:07.598808Z","source":"cohort","subscription_id":"sub_0001"}},{"t":"2026-08-27T14:04:07.598808+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge succeeded","succeeded":true}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":300,"failure_class":"TRANSIENT_ISSUER","gross_recovered_paise":49900,"terminal":"recovered"}}]}},"rescheduled":{"id":"sub_0009","title":"Blocked by the contact window","blurb":"The agent wanted to message someone in the middle of the night. Its own policy said no. Watch what it does with the refusal.","treatment":{"outcome":{"subscription_id":"sub_0009","failure_class":"INSUFFICIENT_FUNDS","terminal":"recovered","gross_recovered_paise":49900,"cost_paise":320,"actions_executed":2,"charge_attempts":1,"actions_blocked":2,"first_failure_at":"2026-08-25T15:31:35.419043Z","recovered_at":"2026-08-26T15:31:35.419043Z","recovered_at_tier":1},"trace":[{"t":"2026-08-25T15:31:35.419043+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"insufficient_funds","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0009","invoice_id":"inv_0009","occurred_at":"2026-08-25T15:31:35.419043Z","source":"cohort","subscription_id":"sub_0009"}},{"t":"2026-08-25T15:31:35.419043+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"INSUFFICIENT_FUNDS","method":"table","rationale":"reason string 'insufficient_funds' maps directly to this class"}},{"t":"2026-08-25T15:31:35.419043+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0009:act:0","channel":"email","free_text":null,"reason":"tell the customer the debit failed for funds so they can top up before the retry","scheduled_at":"2026-08-25T15:31:35.419043Z","subscription_id":"sub_0009","suppressed_free_text":null,"template_id":"t1_notify_email","tier":1,"type":"send_message"},{"action_id":"sub_0009:act:1","channel":null,"free_text":null,"reason":"retry 24h later, when a salary or transfer may have landed","scheduled_at":"2026-08-26T15:31:35.419043Z","subscription_id":"sub_0009","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0009:act:2","channel":null,"free_text":null,"reason":"retry 72h later, when a salary or transfer may have landed","scheduled_at":"2026-08-28T15:31:35.419043Z","subscription_id":"sub_0009","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"},{"action_id":"sub_0009:act:3","channel":null,"free_text":null,"reason":"retry 120h later, when a salary or transfer may have landed","scheduled_at":"2026-08-30T15:31:35.419043Z","subscription_id":"sub_0009","suppressed_free_text":null,"template_id":null,"tier":1,"type":"retry_charge"}],"failure_class":"INSUFFICIENT_FUNDS"}},{"t":"2026-08-25T15:31:35.419043+00:00","stage":"contact_rescheduled","payload":{"action_id":"sub_0009:act:0","action_type":"send_message","attempt":1,"detail":"21:01 IST is outside the 08:00-19:00 IST window","original_time":"2026-08-25T15:31:35.419043+00:00","rescheduled_to":"2026-08-26T02:30:00+00:00","rule":"contact_window"}},{"t":"2026-08-26T02:30:00+00:00","stage":"execute","payload":{"action_id":"sub_0009:act:0","action_reason":"tell the customer the debit failed for funds so they can top up before the retry","action_type":"send_message","channel":"email","cost_paise":20,"detail":"message t1_notify_email delivered=True","succeeded":true,"template_id":"t1_notify_email","tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-26T15:31:35.419043+00:00","stage":"execute","payload":{"action_id":"sub_0009:act:1","action_reason":"retry 24h later, when a salary or transfer may have landed","action_type":"retry_charge","channel":null,"cost_paise":300,"detail":"charge succeeded","succeeded":true,"template_id":null,"tier":1,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-28T15:31:35.419043+00:00","stage":"ladder_block","payload":{"action_id":"sub_0009:act:2","detail":"no further action is warranted for this subject","rule":"recovered"}},{"t":"2026-08-30T15:31:35.419043+00:00","stage":"ladder_block","payload":{"action_id":"sub_0009:act:3","detail":"no further action is warranted for this subject","rule":"recovered"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":320,"failure_class":"INSUFFICIENT_FUNDS","gross_recovered_paise":49900,"terminal":"recovered"}}]},"control":{"outcome":{"subscription_id":"sub_0009","failure_class":"INSUFFICIENT_FUNDS","terminal":"recovered","gross_recovered_paise":49900,"cost_paise":300,"actions_executed":1,"charge_attempts":1,"actions_blocked":0,"first_failure_at":"2026-08-25T15:31:35.419043Z","recovered_at":"2026-08-26T15:31:35.419043Z","recovered_at_tier":1},"trace":[{"t":"2026-08-25T15:31:35.419043+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"insufficient_funds","error_source":"bank","error_step":"payment_authorization","event_id":"evt_0009","invoice_id":"inv_0009","occurred_at":"2026-08-25T15:31:35.419043Z","source":"cohort","subscription_id":"sub_0009"}},{"t":"2026-08-26T15:31:35.419043+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge succeeded","succeeded":true}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":300,"failure_class":"INSUFFICIENT_FUNDS","gross_recovered_paise":49900,"terminal":"recovered"}}]}},"risk":{"id":"sub_0010","title":"A risk decline","blurb":"The bank made a decision about the transaction. A retry would be arguing with it, so this one goes to a human.","treatment":{"outcome":{"subscription_id":"sub_0010","failure_class":"RISK_DECLINE","terminal":"manual_review","gross_recovered_paise":0,"cost_paise":0,"actions_executed":1,"charge_attempts":0,"actions_blocked":0,"first_failure_at":"2026-08-26T22:23:26.462809Z","recovered_at":null,"recovered_at_tier":null},"trace":[{"t":"2026-08-26T22:23:26.462809+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"compliance_violation","error_source":"gateway","error_step":"payment_authorization","event_id":"evt_0010","invoice_id":"inv_0010","occurred_at":"2026-08-26T22:23:26.462809Z","source":"cohort","subscription_id":"sub_0010"}},{"t":"2026-08-26T22:23:26.462809+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"RISK_DECLINE","method":"table","rationale":"reason string 'compliance_violation' maps directly to this class"}},{"t":"2026-08-26T22:23:26.462809+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0010:act:0","channel":null,"free_text":null,"reason":"Compliance violation requires manual review","scheduled_at":"2026-08-26T22:23:26.462809Z","subscription_id":"sub_0010","suppressed_free_text":null,"template_id":null,"tier":4,"type":"escalate_manual_review"}],"failure_class":"RISK_DECLINE"}},{"t":"2026-08-26T22:23:26.462809+00:00","stage":"execute","payload":{"action_id":"sub_0010:act:0","action_reason":"Compliance violation requires manual review","action_type":"escalate_manual_review","channel":null,"cost_paise":0,"detail":"escalated to manual review","succeeded":true,"template_id":null,"tier":4,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":0,"failure_class":"RISK_DECLINE","gross_recovered_paise":0,"terminal":"manual_review"}}]},"control":{"outcome":{"subscription_id":"sub_0010","failure_class":"RISK_DECLINE","terminal":"unrecovered","gross_recovered_paise":0,"cost_paise":900,"actions_executed":3,"charge_attempts":3,"actions_blocked":0,"first_failure_at":"2026-08-26T22:23:26.462809Z","recovered_at":null,"recovered_at_tier":null},"trace":[{"t":"2026-08-26T22:23:26.462809+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"compliance_violation","error_source":"gateway","error_step":"payment_authorization","event_id":"evt_0010","invoice_id":"inv_0010","occurred_at":"2026-08-26T22:23:26.462809Z","source":"cohort","subscription_id":"sub_0010"}},{"t":"2026-08-27T22:23:26.462809+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge declined: compliance_violation","succeeded":false}},{"t":"2026-08-28T22:23:26.462809+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":2,"cost_paise":300,"detail":"charge declined: compliance_violation","succeeded":false}},{"t":"2026-08-29T22:23:26.462809+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":3,"cost_paise":300,"detail":"charge declined: compliance_violation","succeeded":false}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":900,"failure_class":"RISK_DECLINE","gross_recovered_paise":0,"terminal":"unrecovered"}}]}},"revoked":{"id":"sub_0013","title":"A revoked mandate","blurb":"Consent is gone. There is no clever intervention here, and the correct action is to stop -- which costs nothing and is easy to get wrong.","treatment":{"outcome":{"subscription_id":"sub_0013","failure_class":"MANDATE_REVOKED","terminal":"voluntary_churn","gross_recovered_paise":0,"cost_paise":0,"actions_executed":1,"charge_attempts":0,"actions_blocked":0,"first_failure_at":"2026-08-27T08:34:03.010633Z","recovered_at":null,"recovered_at_tier":null},"trace":[{"t":"2026-08-27T08:34:03.010633+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"subscription_cancelled","error_source":"business","error_step":"payment_initiation","event_id":"evt_0013","invoice_id":"inv_0013","occurred_at":"2026-08-27T08:34:03.010633Z","source":"cohort","subscription_id":"sub_0013"}},{"t":"2026-08-27T08:34:03.010633+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"MANDATE_REVOKED","method":"table","rationale":"reason string 'subscription_cancelled' maps directly to this class"}},{"t":"2026-08-27T08:34:03.010633+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0013:act:0","channel":null,"free_text":null,"reason":"Mandate revoked; cannot retry or contact the customer, so subscription is terminated.","scheduled_at":"2026-08-27T08:34:03.010633Z","subscription_id":"sub_0013","suppressed_free_text":null,"template_id":null,"tier":4,"type":"stop"}],"failure_class":"MANDATE_REVOKED"}},{"t":"2026-08-27T08:34:03.010633+00:00","stage":"execute","payload":{"action_id":"sub_0013:act:0","action_reason":"Mandate revoked; cannot retry or contact the customer, so subscription is terminated.","action_type":"stop","channel":null,"cost_paise":0,"detail":"recovery stopped for this subject","succeeded":true,"template_id":null,"tier":4,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":0,"failure_class":"MANDATE_REVOKED","gross_recovered_paise":0,"terminal":"voluntary_churn"}}]},"control":{"outcome":{"subscription_id":"sub_0013","failure_class":"MANDATE_REVOKED","terminal":"voluntary_churn","gross_recovered_paise":0,"cost_paise":900,"actions_executed":3,"charge_attempts":3,"actions_blocked":0,"first_failure_at":"2026-08-27T08:34:03.010633Z","recovered_at":null,"recovered_at_tier":null},"trace":[{"t":"2026-08-27T08:34:03.010633+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"subscription_cancelled","error_source":"business","error_step":"payment_initiation","event_id":"evt_0013","invoice_id":"inv_0013","occurred_at":"2026-08-27T08:34:03.010633Z","source":"cohort","subscription_id":"sub_0013"}},{"t":"2026-08-28T08:34:03.010633+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge declined: subscription_cancelled","succeeded":false}},{"t":"2026-08-29T08:34:03.010633+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":2,"cost_paise":300,"detail":"charge declined: subscription_cancelled","succeeded":false}},{"t":"2026-08-30T08:34:03.010633+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":3,"cost_paise":300,"detail":"charge declined: subscription_cancelled","succeeded":false}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":900,"failure_class":"MANDATE_REVOKED","gross_recovered_paise":0,"terminal":"voluntary_churn"}}]}},"hero":{"id":"sub_0043","title":"A dead card","blurb":"The cause the whole product exists for. The baseline retries a card that cannot work; Recoup asks for a new one instead.","treatment":{"outcome":{"subscription_id":"sub_0043","failure_class":"INSTRUMENT_INVALID","terminal":"recovered","gross_recovered_paise":199900,"cost_paise":320,"actions_executed":2,"charge_attempts":1,"actions_blocked":0,"first_failure_at":"2026-08-26T01:19:30.950498Z","recovered_at":"2026-08-26T03:30:00Z","recovered_at_tier":2},"trace":[{"t":"2026-08-26T01:19:30.950498+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"card_not_enrolled","error_source":"issuer","error_step":"payment_authentication","event_id":"evt_0043","invoice_id":"inv_0043","occurred_at":"2026-08-26T01:19:30.950498Z","source":"cohort","subscription_id":"sub_0043"}},{"t":"2026-08-26T01:19:30.950498+00:00","stage":"classify","payload":{"confidence":0.99,"failure_class":"INSTRUMENT_INVALID","method":"table","rationale":"reason string 'card_not_enrolled' maps directly to this class"}},{"t":"2026-08-26T01:19:30.950498+00:00","stage":"plan","payload":{"actions":[{"action_id":"sub_0043:act:0","channel":"email","free_text":null,"reason":"Card not enrolled; request updated payment method.","scheduled_at":"2026-08-26T01:19:30.950498Z","subscription_id":"sub_0043","suppressed_free_text":null,"template_id":"t2_update_instrument_email","tier":2,"type":"request_instrument_update"}],"failure_class":"INSTRUMENT_INVALID"}},{"t":"2026-08-26T01:19:30.950498+00:00","stage":"contact_rescheduled","payload":{"action_id":"sub_0043:act:0","action_type":"request_instrument_update","attempt":1,"detail":"06:49 IST is outside the 08:00-19:00 IST window","original_time":"2026-08-26T01:19:30.950498+00:00","rescheduled_to":"2026-08-26T02:30:00+00:00","rule":"contact_window"}},{"t":"2026-08-26T02:30:00+00:00","stage":"execute","payload":{"action_id":"sub_0043:act:0","action_reason":"Card not enrolled; request updated payment method.","action_type":"request_instrument_update","channel":"email","cost_paise":20,"detail":"customer updated their payment instrument","succeeded":true,"template_id":"t2_update_instrument_email","tier":2,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-08-26T03:30:00+00:00","stage":"execute","payload":{"action_id":"sub_0043:act:post_update","action_reason":"the customer supplied a new instrument, so charge it","action_type":"retry_charge","channel":null,"cost_paise":300,"detail":"charge succeeded","succeeded":true,"template_id":null,"tier":2,"verdict_detail":"6 rules evaluated, none blocked this action","verdict_rule":"all_rules_passed"}},{"t":"2026-09-01T08:56:14.527912+00:00","stage":"terminal","payload":{"cost_paise":320,"failure_class":"INSTRUMENT_INVALID","gross_recovered_paise":199900,"terminal":"recovered"}}]},"control":{"outcome":{"subscription_id":"sub_0043","failure_class":"INSTRUMENT_INVALID","terminal":"unrecovered","gross_recovered_paise":0,"cost_paise":900,"actions_executed":3,"charge_attempts":3,"actions_blocked":0,"first_failure_at":"2026-08-26T01:19:30.950498Z","recovered_at":null,"recovered_at_tier":null},"trace":[{"t":"2026-08-26T01:19:30.950498+00:00","stage":"ingest","payload":{"attempt_number":1,"error_reason":"card_not_enrolled","error_source":"issuer","error_step":"payment_authentication","event_id":"evt_0043","invoice_id":"inv_0043","occurred_at":"2026-08-26T01:19:30.950498Z","source":"cohort","subscription_id":"sub_0043"}},{"t":"2026-08-27T01:19:30.950498+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":1,"cost_paise":300,"detail":"charge declined: card_not_enrolled","succeeded":false}},{"t":"2026-08-28T01:19:30.950498+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":2,"cost_paise":300,"detail":"charge declined: card_not_enrolled","succeeded":false}},{"t":"2026-08-29T01:19:30.950498+00:00","stage":"control_execute","payload":{"action_type":"retry_charge","attempt":3,"cost_paise":300,"detail":"charge declined: card_not_enrolled","succeeded":false}},{"t":"2026-08-30T08:57:37.929541+00:00","stage":"terminal","payload":{"cost_paise":900,"failure_class":"INSTRUMENT_INVALID","gross_recovered_paise":0,"terminal":"unrecovered"}}]}}},"totals":{"treatment":{"gross":208599900,"cost":936210,"recovered":1001,"denominator":1909,"charges":3003,"per_recovery":3.0,"wasted":3,"by_class":{"INSUFFICIENT_FUNDS":108248300,"TRANSIENT_ISSUER":50425200,"INSTRUMENT_INVALID":21139900,"RISK_DECLINE":0,"MANDATE_REVOKED":0,"UNCLASSIFIED":28786500}},"control":{"gross":183562200,"cost":1390200,"recovered":878,"denominator":1909,"charges":4634,"per_recovery":5.277904328018224,"wasted":1782,"by_class":{"INSUFFICIENT_FUNDS":100501700,"TRANSIENT_ISSUER":53474200,"INSTRUMENT_INVALID":1199600,"RISK_DECLINE":49900,"MANDATE_REVOKED":0,"UNCLASSIFIED":28336800}}}};
+
+const rupees = p => {
+  const n = Math.round(p/100), s = String(Math.abs(n));
+  let out;
+  if (s.length <= 3) out = s;
+  else { const last = s.slice(-3); let rest = s.slice(0,-3), parts = [];
+    while (rest.length > 2) { parts.unshift(rest.slice(-2)); rest = rest.slice(0,-2); }
+    if (rest) parts.unshift(rest);
+    out = parts.join(",") + "," + last; }
+  return (n<0?"-":"") + "₹" + out;
+};
+const pct = x => (x*100).toFixed(1) + "%";
+const clock = iso => { const d = new Date(iso);
+  return String(d.getUTCDate()).padStart(2,"0") + " " +
+         String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0"); };
+const ist = iso => { const d = new Date(new Date(iso).getTime() + 5.5*3600*1000);
+  return String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " IST"; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- header + loop ---------- */
+const m = DATA.meta;
+document.getElementById("stamp").innerHTML =
+  `<b>${m.cohort.toLocaleString("en-IN")}</b> failed charges &middot; seed <b>${m.seed}</b><br>` +
+  `${m.band} band &middot; paired draws per subject<br>generated ${m.generated}`;
+
+document.getElementById("loop").innerHTML = [
+  ["Signal","failed charge arrives"],["Classify","why did it fail"],
+  ["Plan","what answers that cause"],["Policy gate","may we do it",true],
+  ["Act","on the rail"],["Record","append-only"]
+].map(([b,s,gate],i) =>
+  (i?'<span class="arw">&rarr;</span>':"") +
+  `<div class="node${gate?" gate":""}"><b>${b}</b><span>${s}</span></div>`
+).join("");
+
+/* ---------- tiles ---------- */
+const T = DATA.totals.treatment, C = DATA.totals.control;
+const tile = (k,v,base,d,neg) =>
+  `<div class="tile"><span class="k">${k}</span><span class="v serif">${v}</span>
+   <span class="base">baseline ${base}</span><span class="d${neg?" neg":""}">${d}</span></div>`;
+const g = (T.gross-C.gross)/C.gross, netT = T.gross-T.cost, netC = C.gross-C.cost;
+document.getElementById("tiles").innerHTML =
+  tile("Gross recovered", rupees(T.gross), rupees(C.gross), "+"+pct(g)) +
+  tile("Net of cost", rupees(netT), rupees(netC), "+"+pct((netT-netC)/netC)) +
+  tile("Recovery rate", pct(T.recovered/T.denominator), pct(C.recovered/C.denominator),
+       "+"+((T.recovered/T.denominator - C.recovered/C.denominator)*100).toFixed(1)+"pp") +
+  tile("Charges per recovery", T.per_recovery.toFixed(2), C.per_recovery.toFixed(2),
+       pct((T.per_recovery-C.per_recovery)/C.per_recovery)) +
+  tile("Wasted attempts", T.wasted.toLocaleString("en-IN"), C.wasted.toLocaleString("en-IN"),
+       "−"+pct((C.wasted-T.wasted)/C.wasted)+" eliminated");
+
+/* ---------- trace rendering ---------- */
+const CLS = {INSUFFICIENT_FUNDS:"a shortfall",INSTRUMENT_INVALID:"a dead instrument",
+  MANDATE_REVOKED:"consent withdrawn",TRANSIENT_ISSUER:"an issuer problem",
+  RISK_DECLINE:"a risk block",UNCLASSIFIED:"cause unknown"};
+const TYPE = {retry_charge:"Retry the charge",request_instrument_update:"Ask for a new instrument",
+  send_message:"Send a message",stop:"Stop",escalate_manual_review:"Escalate to a human"};
+
+function describe(stage, p) {
+  switch (stage) {
+    case "ingest": return {tag:"Signal", tone:"", t:"A charge failed",
+      d:`Razorpay reason <code>${esc(p.error_reason)}</code> &middot; source
+         <code>${esc(p.error_source)}</code> &middot; step <code>${esc(p.error_step)}</code>`};
+    case "classify": return {tag:"Classify", tone:"rail",
+      t:`${p.failure_class} &mdash; ${CLS[p.failure_class]||""}`,
+      d:`<b>${p.method === "table" ? "Lookup table" : p.method === "llm" ? "Model" : "Fallback"}</b>,
+         confidence ${p.confidence.toFixed(2)}. ${esc(p.rationale)}`};
+    case "plan": {
+      const acts = (p.actions||[]).map(a =>
+        `<div class="act"><b>T${a.tier} &middot; ${a.scheduled_at ? clock(a.scheduled_at) : "now"}</b>
+          <span>${TYPE[a.type]||a.type}${a.template_id?` &middot; <code>${esc(a.template_id)}</code>`:""}
+          <br>${esc(a.reason||"")}</span></div>` +
+        (a.suppressed_free_text ? `<div class="sup"><b>Copy withheld by policy</b>
+           <q>${esc(a.suppressed_free_text)}</q></div>` : "")).join("");
+      const n = (p.actions||[]).length;
+      return {tag:"Plan", tone:"rail",
+              t:`${n} action${n===1?"":"s"}, matched to the cause`,
+              d:`<div class="acts">${acts}</div>`};
+    }
+    case "contact_rescheduled": return {tag:"Policy", tone:"hold", t:"Blocked &mdash; and moved, not dropped",
+      d:`<code>${esc(p.rule)}</code>: ${esc(p.detail)}.<br>
+         Rescheduled to <b>${ist(p.rescheduled_to)}</b>, attempt ${p.attempt}.`};
+    case "policy_block": return {tag:"Policy", tone:"hold", t:`Refused by <code>${esc(p.rule)}</code>`,
+      d:esc(p.detail||"")};
+    case "ladder_block": return {tag:"Ladder", tone:"", t:"Held at the ladder",
+      d:`<code>${esc(p.rule)}</code>: ${esc(p.detail||"")}`};
+    case "execute": case "control_execute": {
+      const ok = p.succeeded;
+      return {tag:"Act", tone: ok?"good":"", t:(TYPE[p.action_type]||p.action_type) + (ok?"":" — declined"),
+        d:`${esc(p.detail||"")} &middot; cost ${rupees(p.cost_paise||0)}`};
+    }
+    case "terminal": {
+      const good = p.terminal === "recovered";
+      return {tag:"Outcome", tone: good?"good":(p.terminal==="unrecovered"?"halt":"hold"),
+        t: good ? `Recovered ${rupees(p.gross_recovered_paise)}`
+                : p.terminal.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()),
+        d:`Spent ${rupees(p.cost_paise)} getting there.`};
+    }
+    default: return {tag:stage, tone:"", t:stage, d:""};
+  }
+}
+
+function renderCol(title, note, trace, isAgent) {
+  const steps = trace.map(r => {
+    const x = describe(r.stage, r.payload);
+    return `<div class="step"><span class="clk">${clock(r.t)}</span><div class="body">
+      <div class="tagrow"><span class="tag ${x.tone}">${x.tag}</span></div>
+      <div class="t">${x.t}</div>${x.d?`<div class="d">${x.d}</div>`:""}</div></div>`;
+  }).join("");
+  return `<div class="col${isAgent?" agent":""}"><h3>${title}<em>${note}</em></h3>
+          <div class="steps">${steps}</div></div>`;
+}
+
+function show(key) {
+  const c = DATA.cases[key];
+  document.querySelectorAll(".case").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.k === key)));
+  document.getElementById("blurb").textContent = c.blurb;
+  const to = c.treatment.outcome, co = c.control.outcome;
+  const note = o => `${o.charge_attempts} charge${o.charge_attempts===1?"":"s"} &middot; ${rupees(o.gross_recovered_paise)}`;
+  document.getElementById("cols").innerHTML =
+    renderCol("Recoup", note(to), c.treatment.trace, true) +
+    renderCol("Baseline retry ladder", note(co), c.control.trace, false);
+}
+
+document.getElementById("cases").innerHTML = Object.entries(DATA.cases).map(([k,c]) =>
+  `<button class="case" data-k="${k}" aria-pressed="false" type="button">
+     <b>${c.title}</b><span class="mono">${c.id}</span></button>`).join("");
+document.querySelectorAll(".case").forEach(b => b.addEventListener("click", () => show(b.dataset.k)));
+show(Object.keys(DATA.cases)[0]);
+
+/* ---------- cause bars ---------- */
+const cls = [...new Set([...Object.keys(T.by_class), ...Object.keys(C.by_class)])];
+const deltas = cls.map(k => [k, (T.by_class[k]||0) - (C.by_class[k]||0)])
+                  .sort((a,b) => b[1]-a[1]);
+const span = Math.max(...deltas.map(d => Math.abs(d[1]))) || 1;
+document.getElementById("bars").innerHTML = deltas.map(([k,d]) => {
+  const w = Math.abs(d)/span*50, pos = d >= 0;
+  return `<div class="bar"><span class="nm">${k}</span>
+    <span class="track"><u style="left:50%"></u>
+      <i class="${pos?"pos":"neg"}" style="${pos?`left:50%;width:${w}%`:`right:50%;width:${w}%`}"></i>
+    </span>
+    <span class="amt ${pos?"pos":"neg"}">${pos?"+":""}${rupees(d)}</span></div>`;
+}).join("") + `<p class="legend">Recoup wins decisively where knowing the cause changes the
+  action, and loses on the two causes an ordinary ladder already handles well. The net is
+  strongly positive; it is not a clean sweep.</p>`;
+
+document.getElementById("foot").innerHTML =
+  `<span>Every figure recomputed from the audit log, not from instrumentation inside the pipeline.</span>
+   <span>Recovery outcomes are simulated; classification, policy and the audit trail are real code.</span>`;
+</script>
