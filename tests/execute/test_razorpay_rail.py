@@ -49,8 +49,20 @@ def test_charging_is_refused_with_an_explanation_not_a_fabricated_result():
 
 
 def test_the_rail_still_satisfies_the_payment_rail_protocol():
+    """Checked against the Protocol's own method set, not a list typed out here.
+
+    The previous version of this test asserted `hasattr` on two of the four
+    methods, which is why it went on passing after `PaymentRail` gained
+    `create_pay_now_link`/`deliver_pay_now_link` and two doubles did not.
+    See `tests/execute/test_rail_conformance.py`, which covers every rail
+    including the test doubles.
+    """
+    from tests.execute.test_rail_conformance import protocol_methods
+
     r = rail(sub_TEST0001=HALTED)
-    assert hasattr(r, "charge") and hasattr(r, "deliver_update_request")
+    assert protocol_methods(), "the Protocol declares no methods; the check is vacuous"
+    for name in protocol_methods():
+        assert callable(getattr(r, name, None)), f"RazorpayTestRail is missing {name}"
 
 
 def test_fetching_a_subscription_returns_the_entity():

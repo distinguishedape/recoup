@@ -3,5 +3,157 @@
   "seed": 3,
   "band": "mid",
   "cohort_size": 2000,
-  "start_at": "2026-08-25T09:00:00+00:00"
+  "start_at": "2026-08-25T09:00:00+00:00",
+  "inputs_hash": "5ee1d5e84d725ac3",
+  "inputs": {
+    "probabilities": {
+      "bands": {
+        "low": {
+          "retry_success": {
+            "INSUFFICIENT_FUNDS": 0.3,
+            "INSTRUMENT_INVALID": 0.0,
+            "MANDATE_REVOKED": 0.0,
+            "TRANSIENT_ISSUER": 0.55,
+            "RISK_DECLINE": 0.0,
+            "UNCLASSIFIED": 0.2
+          },
+          "update_request_conversion": 0.2,
+          "pay_now_conversion": 0.12
+        },
+        "mid": {
+          "retry_success": {
+            "INSUFFICIENT_FUNDS": 0.45,
+            "INSTRUMENT_INVALID": 0.01,
+            "MANDATE_REVOKED": 0.0,
+            "TRANSIENT_ISSUER": 0.7,
+            "RISK_DECLINE": 0.015,
+            "UNCLASSIFIED": 0.3
+          },
+          "update_request_conversion": 0.35,
+          "pay_now_conversion": 0.22
+        },
+        "high": {
+          "retry_success": {
+            "INSUFFICIENT_FUNDS": 0.6,
+            "INSTRUMENT_INVALID": 0.02,
+            "MANDATE_REVOKED": 0.0,
+            "TRANSIENT_ISSUER": 0.8,
+            "RISK_DECLINE": 0.03,
+            "UNCLASSIFIED": 0.4
+          },
+          "update_request_conversion": 0.5,
+          "pay_now_conversion": 0.34
+        }
+      },
+      "retry_decay": 0.6,
+      "post_update_charge_success": 0.95,
+      "timing": {
+        "INSUFFICIENT_FUNDS": [
+          0.45,
+          1.55,
+          60.0
+        ],
+        "INSTRUMENT_INVALID": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "MANDATE_REVOKED": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "TRANSIENT_ISSUER": [
+          0.35,
+          1.25,
+          5.0
+        ],
+        "RISK_DECLINE": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "UNCLASSIFIED": [
+          0.7,
+          1.2,
+          48.0
+        ]
+      }
+    },
+    "budgets": {
+      "INSUFFICIENT_FUNDS": [
+        3,
+        2
+      ],
+      "INSTRUMENT_INVALID": [
+        0,
+        2
+      ],
+      "MANDATE_REVOKED": [
+        0,
+        0
+      ],
+      "TRANSIENT_ISSUER": [
+        3,
+        0
+      ],
+      "RISK_DECLINE": [
+        0,
+        0
+      ],
+      "UNCLASSIFIED": [
+        3,
+        2
+      ]
+    },
+    "costs": {
+      "charge_attempt_paise": 300,
+      "channel_paise": {
+        "email": 20,
+        "sms": 25
+      }
+    },
+    "cohort": {
+      "class_weights": {
+        "INSUFFICIENT_FUNDS": 0.4,
+        "INSTRUMENT_INVALID": 0.2,
+        "MANDATE_REVOKED": 0.05,
+        "TRANSIENT_ISSUER": 0.15,
+        "RISK_DECLINE": 0.05,
+        "UNCLASSIFIED": 0.15
+      },
+      "plan_amounts_paise": [
+        49900,
+        99900,
+        199900,
+        499900
+      ],
+      "failure_spread_hours": 48
+    },
+    "schedule": {
+      "funds_retry_delays_hours": [
+        24,
+        72,
+        120
+      ],
+      "transient_retry_delays_hours": [
+        12,
+        24,
+        48
+      ],
+      "unclassified_retry_delays_hours": [
+        24,
+        72,
+        120
+      ],
+      "final_notice_delay_hours": 72
+    },
+    "prompts": {
+      "planner_system": "You plan recovery interventions for failed subscription auto-debits in India.\n\nYou are given the root cause of one failure. Propose the sequence of actions that best recovers the payment without harassing the customer.\n\nAllowed action types: retry_charge, request_instrument_update, send_message, pay_now_link, stop, escalate_manual_review.\nAllowed tiers: 1 (notify), 2 (request action), 3 (final notice), 4 (terminal).\nAllowed template ids: t1_notify_email, t2_pay_now_email, t2_pay_now_unclear_email, t2_update_instrument_email, t2_update_instrument_sms, t3_final_notice_email, t3_final_notice_sms.\n\nHard rules -- a plan that breaks any of these is discarded entirely:\n- You may not write free text to a customer. Every message action must name one of the allowed template ids and must not include a `free_text` field.\n- Each class has an attempt budget. A plan that exceeds it is discarded entirely, so proposing more than the budget loses the whole plan rather than extending it.\n- Never propose a charge retry for a cause a retry cannot fix (an invalid instrument, a revoked mandate, a risk block).\n- `pay_now_link` is ONLY valid for INSUFFICIENT_FUNDS and UNCLASSIFIED. Proposing it for any other cause will be refused by the policy engine and the whole plan will score as worse.\n- `delay_hours` must be between 0 and 168.\n- At most 8 actions.\n- Do not include a stop or an escalation alongside actions scheduled at or after\nit. A plan that stops and then retries is discarded entirely.\n\nTiming matters as much as choice of action, and the two causes differ sharply:\n- A bank or gateway outage clears in *hours*, not days. Retry within a few hours;\nwaiting a day wastes the window in which a retry would have worked.\n- A funds shortfall tracks the customer's pay cycle. Retry after a day, then\nagain around three days, which is where salary and transfer credits land.\n\nReply with JSON only, in exactly this shape:\n{\"actions\": [{\"type\": \"...\", \"delay_hours\": 0, \"tier\": 1, \"channel\": \"email\" or null, \"template_id\": \"...\" or null, \"reason\": \"one sentence\"}]}\n",
+      "resolver_system": "You classify failed subscription auto-debit attempts for an Indian payments recovery system.\n\nChoose exactly one class from this closed list:\n\n- INSUFFICIENT_FUNDS: the customer's account did not have the money.\n- INSTRUMENT_INVALID: the card or mandate instrument itself is no longer usable (expired, blocked, disabled for online use).\n- MANDATE_REVOKED: the customer has withdrawn authorisation.\n- TRANSIENT_ISSUER: a bank or gateway technical failure that is likely to clear on its own.\n- RISK_DECLINE: the payment was blocked by a risk or fraud check.\n- UNCLASSIFIED: the evidence does not support any of the above.\n\nThe reason string you are given is one Razorpay explicitly documents as *not* disclosing the underlying cause. That is why it reached you. It does not mean no evidence exists.\n\n**`source` and `step` are the evidence.** They say which party in the chain refused and at which stage, and that narrows the cause considerably. Read them first:\n\n- `source: bank` at `payment_authorization` -- the customer's own bank refused to move the money. Overwhelmingly this is INSUFFICIENT_FUNDS.\n- `source: issuer` -- the card issuer refused the instrument itself. Usually INSTRUMENT_INVALID: expired, blocked, or not permitted online.\n- `source: gateway` at `payment_authorization` -- the failure never reached the bank. Usually TRANSIENT_ISSUER, or RISK_DECLINE if a risk or compliance check is implicated.\n- `source: business` -- the merchant side stopped it, which points at MANDATE_REVOKED.\n- `step: payment_authentication` -- failed at 3D-Secure or OTP rather than at the money, which points at the instrument or at UNCLASSIFIED.\n\nRules:\n- Name the most likely cause the evidence supports, and set `confidence` to reflect how strongly it supports it. A well-calibrated 0.6 is far more useful than a reflexive UNCLASSIFIED, because that bucket is treated as \"cause unknown\" and gets a generic retry ladder rather than the intervention the cause actually needs.\n- Reserve UNCLASSIFIED for when `source` and `step` genuinely fail to discriminate -- not merely because the reason string alone was uninformative. It always is; that is why it was sent to you.\n- Reply with JSON only, no commentary, in exactly this shape:\n{\"failure_class\": \"<one of the classes above>\", \"confidence\": <number between 0 and 1>, \"rationale\": \"<one sentence>\"}\n",
+      "planner_user_shape": "Plan the recovery for this failure.\n\nfailure_class: INSUFFICIENT_FUNDS\nclassifier_rationale: probe\nreason: payment_failed\nsource: gateway\nstep: payment_authorization\nattempt_number: 1\nbudget_charge_retries: 3\nbudget_contacts: 2\n",
+      "resolver_user_shape": "Classify this failed auto-debit attempt.\n\nreason: payment_failed\nsource: gateway\nstep: payment_authorization\nattempt_number: 1\n"
+    },
+    "model": "openai/gpt-oss-120b"
+  }
 }

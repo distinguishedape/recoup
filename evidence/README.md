@@ -12,7 +12,7 @@ python -m scripts.run_experiment --cohort-size 200 --seed 3 \
 | `report.md` | The full report: headline, band sweep, replication across four cohorts, the baseline it compared against, and every assumption it rests on |
 | `replication.json` | Per-cohort findings, machine readable |
 | `sweep.json` | The Low/Mid/High sweep for the registered cohort |
-| `frozen_config.json` | Configuration hash, written *before* the run |
+| `frozen_config.json` | The pre-registration, written *before* the run: the configuration hash, and the prompts, probability bands, budgets, costs, cohort distribution, schedule and model name the run was measured against. A later run that differs on any of them refuses to publish rather than quietly reporting different numbers under the same hash (D62). |
 | `llm_cache.json` | Every model response, keyed by prompt hash |
 | `audit_mid_*.csv` | Full audit trail for both arms at the Mid band, one row per decision |
 | `console.html` | The decision console, rebuilt from the same run |

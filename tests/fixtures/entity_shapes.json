@@ -1,0 +1,63 @@
+{
+  "_comment": "Field names and value types of the live Razorpay entities this project reads, recorded by scripts/record_entity_shapes.py against a test-mode account. Values are deliberately absent. Regenerate to re-check the claim; tests/razorpay/test_entity_shape_contract.py holds the test fakes to it.",
+  "entities": {
+    "plan": {
+      "created_at": "int",
+      "entity": "str",
+      "id": "str",
+      "interval": "int",
+      "item": {
+        "active": "bool",
+        "amount": "int",
+        "created_at": "int",
+        "currency": "str",
+        "description": "null",
+        "hsn_code": "null",
+        "id": "str",
+        "name": "str",
+        "sac_code": "null",
+        "tax_group_id": "null",
+        "tax_id": "null",
+        "tax_inclusive": "bool",
+        "tax_rate": "null",
+        "type": "str",
+        "unit": "null",
+        "unit_amount": "int",
+        "updated_at": "int"
+      },
+      "notes": "list",
+      "period": "str"
+    },
+    "subscription": {
+      "auth_attempts": "int",
+      "change_scheduled_at": "null",
+      "charge_at": "int",
+      "created_at": "int",
+      "current_end": "int",
+      "current_start": "int",
+      "customer_contact": "str",
+      "customer_email": "str",
+      "customer_id": "null",
+      "customer_notify": "bool",
+      "end_at": "int",
+      "ended_at": "null",
+      "entity": "str",
+      "expire_by": "null",
+      "halted_at": "null",
+      "has_scheduled_changes": "bool",
+      "id": "str",
+      "notes": "list",
+      "offer_id": "null",
+      "paid_count": "int",
+      "payment_method": "str",
+      "plan_id": "str",
+      "quantity": "int",
+      "remaining_count": "int",
+      "short_url": "str",
+      "source": "str",
+      "start_at": "int",
+      "status": "str",
+      "total_count": "int"
+    }
+  }
+}

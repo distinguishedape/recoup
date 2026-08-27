@@ -18,6 +18,7 @@ from recoup.audit.log import AuditLog
 from recoup.execute.executor import CHANNEL_COST_PAISE, CHARGE_ATTEMPT_COST_PAISE
 from recoup.execute.probabilities import BANDS
 from recoup.experiment.control import CONTROL_RETRY_DELAYS_HOURS
+from recoup.experiment.inputs import inputs_hash
 from recoup.experiment.replication import ReplicationResult
 from recoup.experiment.sweep import SweepResult
 from recoup.ingest.cohort import CLASS_WEIGHTS, PLAN_AMOUNTS_PAISE
@@ -87,6 +88,15 @@ def render_report(sweep: SweepResult, replication: ReplicationResult | None = No
     lines.append(
         f"Cohort of {sweep.config.cohort_size} failed subscription charges, seed "
         f"{sweep.config.seed}, configuration hash `{config_hash(sweep.config)}`."
+    )
+    lines.append("")
+    lines.append(
+        f"Measurement inputs hash `{inputs_hash()}` — the prompts, probability bands, "
+        "budgets, costs, cohort distribution and schedule. The configuration hash above "
+        "covers the seed and the cohort; it does not move when a prompt is edited, and "
+        "an edited prompt re-asks every plan. This digest excludes the model name, which "
+        "varies with whoever reproduces the run; `frozen_config.json` registers the model "
+        "as well, in full, so a reader can see exactly what was pre-registered."
     )
     lines.append("")
 

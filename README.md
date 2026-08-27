@@ -324,7 +324,7 @@ each blocked action and the rule that blocked it.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 601 tests
+python -m pytest -q                       # 648 tests
 
 python -m scripts.run_experiment --cohort-size 2000 --seed 3     --replicate 11,29,47 --out-dir artifacts --freeze
 ```
@@ -332,6 +332,24 @@ python -m scripts.run_experiment --cohort-size 2000 --seed 3     --replicate 11,
 That writes `report.md`, machine-readable `sweep.json` and `replication.json`,
 and audit CSVs for both arms at all three bands. A generated copy is committed
 under [`evidence/`](evidence/).
+
+**`--freeze` registers what the run is measured against**, and not only the seed.
+The configuration hash covers the seed, band, cohort size and start time — none of
+which is what actually moved the published numbers. A sentence added to the planner
+prompt re-asked every plan and shifted dead-card money by ₹45,475 while that hash sat
+unchanged and `--verify-frozen` reported "configuration verified unchanged". So the
+prompts, probability bands, budgets, costs, cohort distribution, schedule and model
+name are registered in `frozen_config.json` too, and a later run that differs on any
+of them **refuses to publish**, naming what moved:
+
+```
+refusing to run: the measurement inputs changed after freezing:
+budgets.INSUFFICIENT_FUNDS, prompts.planner_user_shape
+```
+
+Re-run with `--freeze` to register the change deliberately. That is the point: a
+measurement change should be a visible act, not a silent one. See
+[D62](docs/decisions.md).
 
 **Reproducing with no API key:**
 

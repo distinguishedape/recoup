@@ -107,3 +107,8 @@ class RazorpayReadClient:
 
     def payment(self, payment_id: str) -> dict[str, Any]:
         return self._fetch(f"payments/{payment_id}")
+
+    def plan(self, plan_id: str) -> dict[str, Any]:
+        """One plan. A subscription carries no amount of its own -- it lives
+        here, under ``item.amount``."""
+        return self._fetch(f"plans/{plan_id}")

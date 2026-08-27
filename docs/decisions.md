@@ -1449,3 +1449,120 @@ replay them. The residual risk is the same one that caused it — the default mo
 moving target, and a future provider change will invalidate the committed cache again. The
 mitigation is that the failure is now loud (the runner refuses) rather than quiet, and the
 model name is printed next to the command instead of being implicit.
+
+## Phase 15 — Closing what the reviews deferred
+
+### D62. The freeze did not cover the things that decide the numbers
+
+D60 recorded that D59's prompt edit moved dead-card money by ₹45,475 on a cause the change
+was not aimed at, and flagged that **nothing warns when a prompt change is a measurement
+change**. This closes that.
+
+**What was actually wrong.** `config_hash` covers the seed, the band, the cohort size and the
+start time. It does not cover the prompts, the probability bands, the per-class budgets, the
+attempt and channel costs, the cohort's own class distribution, the deterministic schedule or
+the model name — every one of which decides the output. So `--verify-frozen` printed
+*"configuration verified unchanged"* over a run whose planner prompt had been rewritten. The
+freeze was true and useless at the same time, which is worse than absent: it is a guarantee a
+reader can point at.
+
+**And the guard nobody invoked.** `--verify-frozen` was opt-in, and the published command
+never passed it. Even a hash covering everything would not have fired.
+
+**What changed.** `recoup/experiment/inputs.py` assembles the registered inputs as values —
+not source text, so a reworded comment is not reported as a measurement change. Prompts are
+covered twice: the system prompts verbatim, and the *shape* of the per-event prompts, rendered
+against a fixed probe event so a changed field order counts as the re-ask it is. `freeze_config`
+stores them in full beside the existing `config_hash`, which is unchanged at `7aa7962cac907ba0`
+so published runs stay comparable. `verify_frozen_config` diffs the registration and names the
+paths that moved. And the check now runs **whenever a frozen file is present**, before the
+sweep starts, refusing to publish on drift; `--freeze` is how a deliberate change is
+re-registered. A frozen file with no registration is refused rather than waved through, because
+it cannot vouch for what it never recorded.
+
+Verified against the real published freeze, not only in unit tests:
+
+```
+A. published configuration, untouched -> 7aa7962cac907ba0 (verified)
+B. one sentence appended to the planner prompt
+   -> the measurement inputs changed after freezing: prompts.planner_system
+C. a budget widened by one contact
+   -> ... : budgets.INSUFFICIENT_FUNDS, prompts.planner_user_shape
+```
+
+Case C is the one worth noticing: widening a budget also changes the prompt, because the prompt
+embeds the budget. The old hash saw neither.
+
+**The published numbers did not move.** The bundle was regenerated and `sweep.json` is
+byte-identical; the report now also carries the inputs digest. Registered inputs hash
+`5ee1d5e84d725ac3` (model included), report digest `1f90b70d9afeb6a0` (model excluded, since it
+varies with whoever reproduces the run).
+
+**What it costs if this is wrong.** The registration is a list, and a list can be incomplete —
+something that moves the numbers and is not in `measurement_inputs()` is still invisible. Tests
+pin the six sections that exist today, and a new constant that changes outcomes has to be added
+by hand. That is a weaker guarantee than "everything is covered" and is stated as such.
+
+### D63. `PaymentRail` conformance is now checked, and checking it found a diverged double
+
+`PaymentRail` is a `typing.Protocol` — structural, enforced by nobody at runtime. Task 4 added
+`create_pay_now_link`/`deliver_pay_now_link` to it and nothing anywhere changed until a scenario
+finally called them, at which point two hand-written doubles raised `AttributeError` against a
+suite of 590 green tests. The test that should have caught it was called
+`test_the_rail_still_satisfies_the_payment_rail_protocol` and asserted `hasattr` on **two of the
+four methods**.
+
+`tests/execute/test_rail_conformance.py` derives the method set from the Protocol itself, so
+adding a method tightens the test automatically, and checks presence *and* argument names across
+every implementation — including the test doubles, since a double that has drifted is precisely
+what makes a green suite lie. It also guards itself: if `__protocol_attrs__` ever returns empty,
+a test fails rather than every assertion passing vacuously.
+
+**It found one immediately.** `ConfigurablePayNowRail` in `tests/execute/test_executor.py`
+implemented two of the four methods. Any test that routed a charge through it would have hit
+`AttributeError`. It now implements all four, with the two it does not simulate raising
+`NotImplementedError` rather than returning a plausible value — a test that accidentally routes a
+charge through a pay-now double should say so loudly, not quietly measure a fabrication.
+
+### D64. The real entity shape is now a recording, not a comment
+
+Task 7 wrote `_amount_for`/`_customer_for` against a guessed subscription entity — a nested
+`amount` and a nested `customer` object, neither of which a real subscription has. The unit tests
+passed because the fakes encoded the same guess: they agreed with each other and with nothing
+else. The shape was corrected against the live account and the correction was written down **in a
+commit message and a code comment** — true when written, checkable by nobody afterwards, which is
+exactly how the claim in D61 rotted.
+
+`scripts/record_entity_shapes.py` records it as an artefact instead: GET-only, through the
+read client that a test proves contains no write verb, writing **field names and value types
+only** to `tests/fixtures/entity_shapes.json`. No values — the account is real and the fixture is
+committed; which keys exist is the whole content of the claim.
+`tests/razorpay/test_entity_shape_contract.py` fails if a fake invents a field the API does not
+return, if it gives one the wrong type, or if production reads a field the recording has never
+seen.
+
+**Running it contradicted two things the code assumed.** On a real subscription entity
+`customer_id` comes back **`null`** and `notes` comes back as a **list**, not a dict. Both name
+fallbacks in `_customer_for` therefore never fire, and a live pay-now link goes out with **no
+customer name at all**. The branches are kept — other Razorpay entities do carry a `notes` object
+— but the docstring now says plainly that nobody should expect a name from them. This is the
+second time the same class of bug has been found in the same function, and the first time it was
+found by an artefact rather than by an outage.
+
+### D65. Two live-path corrections: an empty contact, and a silent refusal
+
+**An absent contact was being sent as `""`.** `_customer_for` built `{name, email, contact}`
+unconditionally, so a subscription with an email and no phone put `contact: ""` on the wire.
+Razorpay validates that field server-side — the API findings record a live 400 on a number it
+did not accept — and an empty string is not an absence, it is a claim to have a value. Everywhere
+else this project refuses to supply a placeholder rather than supply a wrong one. Empty fields
+are now omitted; a full contact is still sent in full.
+
+**`deliver_pay_now_link` refused to guess and left no trace of refusing.** `create_pay_now_link`
+audits both of its outcomes and reconciliation audits the eventual payment. Between them sat a
+decision that recorded nothing: asked whether the customer paid, the live rail always answers no,
+deliberately, because conversion is not observable at send time. A reader replaying the subject
+saw a link created and then silence, which reads like a hole in the evidence rather than the
+refusal it is — in a system whose central claim is an append-only log where every decision names
+itself. It now appends `pay_now_link_payment_unknown` saying so. `SimulatedRail` is untouched, so
+no measured number moves.

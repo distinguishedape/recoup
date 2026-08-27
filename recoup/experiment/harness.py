@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from recoup.audit.log import AuditLog
 from recoup.experiment.control import run_control_arm
+from recoup.experiment.inputs import inputs_hash, measurement_inputs, what_changed
 from recoup.llm.client import LLMClient
 from recoup.orchestrate.runner import RunConfig, config_hash, run_recoup_arm
 from recoup.report.metrics import ArmMetrics, Comparison, compare, compute_metrics
@@ -84,7 +85,15 @@ def run_paired_experiment(
     )
 
 
-def freeze_config(config: RunConfig, path: Path) -> str:
+def freeze_config(config: RunConfig, path: Path, model: str | None = None) -> str:
+    """Register the run *and* the inputs that decide its numbers.
+
+    ``config_hash`` is kept exactly as it was, so a published run keeps its
+    identity and stays comparable with earlier bundles. What is added beside it
+    is the registration that was missing: the prompts, probabilities, budgets,
+    costs, cohort distribution and schedule, stored in full rather than as a
+    digest so that drift can name what moved instead of only that something did.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     digest = config_hash(config)
@@ -96,6 +105,8 @@ def freeze_config(config: RunConfig, path: Path) -> str:
                 "band": config.band.value,
                 "cohort_size": config.cohort_size,
                 "start_at": config.start_at.isoformat(),
+                "inputs_hash": inputs_hash(model),
+                "inputs": measurement_inputs(model),
             },
             indent=2,
         ),
@@ -104,7 +115,7 @@ def freeze_config(config: RunConfig, path: Path) -> str:
     return digest
 
 
-def verify_frozen_config(config: RunConfig, path: Path) -> str:
+def verify_frozen_config(config: RunConfig, path: Path, model: str | None = None) -> str:
     path = Path(path)
     if not path.exists():
         raise ConfigurationDrift(
@@ -116,5 +127,23 @@ def verify_frozen_config(config: RunConfig, path: Path) -> str:
         raise ConfigurationDrift(
             f"configuration changed after freezing: frozen {frozen.get('config_hash')!r}, "
             f"current {digest!r}"
+        )
+    registered = frozen.get("inputs")
+    if registered is None:
+        # A file written before the inputs were registered cannot vouch for
+        # them. Passing it silently would be the same false reassurance that
+        # let an edited prompt through under an unchanged hash.
+        raise ConfigurationDrift(
+            f"the frozen configuration at {path} registered no measurement inputs, so it "
+            "cannot say whether the prompts, probabilities, budgets or schedule changed. "
+            "Re-freeze to register them."
+        )
+    changed = what_changed(registered, measurement_inputs(model))
+    if changed:
+        raise ConfigurationDrift(
+            "the measurement inputs changed after freezing: "
+            + ", ".join(changed)
+            + ". These decide the numbers as surely as the seed does -- a changed prompt "
+            "re-asks every plan. Re-freeze deliberately if the change is intended."
         )
     return digest

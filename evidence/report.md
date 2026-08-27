@@ -2,6 +2,8 @@
 
 Cohort of 2000 failed subscription charges, seed 3, configuration hash `7aa7962cac907ba0`.
 
+Measurement inputs hash `1f90b70d9afeb6a0` — the prompts, probability bands, budgets, costs, cohort distribution and schedule. The configuration hash above covers the seed and the cohort; it does not move when a prompt is edited, and an edited prompt re-asks every plan. This digest excludes the model name, which varies with whoever reproduces the run; `frozen_config.json` registers the model as well, in full, so a reader can see exactly what was pre-registered.
+
 ## Headline (Mid band)
 
 | Arm | Gross recovered | Cost | Net recovered | Recovery rate | Attempts / recovery | Wasted attempts | Mean time to recovery |

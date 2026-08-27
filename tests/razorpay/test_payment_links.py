@@ -311,3 +311,91 @@ def test_a_plan_that_cannot_be_fetched_yields_no_link_and_no_guess(tmp_path):
     records = [r for r in audit.reconstruct("sub_1") if r.stage == "pay_now_link_unavailable"]
     assert records, "a failed plan fetch must still be recorded, not silently dropped"
     assert records[0].payload["missing"] == "amount"
+
+
+# ---------------------------------------------------------------------------
+# What a missing contact field is allowed to look like on the wire
+# ---------------------------------------------------------------------------
+
+
+def test_a_missing_phone_is_omitted_not_sent_as_an_empty_string():
+    """Razorpay validates ``customer.contact`` server-side -- the findings file
+    records a live 400 on a number it did not like. An empty string is a value
+    we are asserting we have, and we do not have it. Everywhere else this
+    project refuses to send a placeholder rather than send a wrong one; the
+    wire body is not an exception."""
+    client = FakeClient(
+        {"sub_1": real_subscription(customer_email="only@example.com", customer_contact="")}
+    )
+    writer = fake_writer()
+    RazorpayTestRail(client, CONFIG, links=writer).create_pay_now_link("sub_1", NOW)
+    customer = writer.created[0]["customer"]
+    assert "contact" not in customer
+    assert customer["email"] == "only@example.com"
+
+
+def test_a_missing_email_is_omitted_not_sent_as_an_empty_string():
+    client = FakeClient(
+        {"sub_1": real_subscription(customer_email="", customer_contact="+919876500000")}
+    )
+    writer = fake_writer()
+    RazorpayTestRail(client, CONFIG, links=writer).create_pay_now_link("sub_1", NOW)
+    customer = writer.created[0]["customer"]
+    assert "email" not in customer
+    assert customer["contact"] == "+919876500000"
+
+
+def test_a_customer_with_no_name_anywhere_sends_no_name_key():
+    """``name`` falls back to the customer id and then to nothing. Nothing means
+    the key is absent, not present and blank.
+
+    The overrides here are the shape a *real* entity has, per
+    ``tests/fixtures/entity_shapes.json``: ``customer_id`` comes back ``null``
+    and ``notes`` comes back as a list, not a dict. Which means this is not an
+    edge case -- it is the ordinary live path, and the name is always absent on
+    it.
+    """
+    client = FakeClient(
+        {
+            "sub_1": real_subscription(
+                customer_id=None, notes=[], customer_email="a@example.com"
+            )
+        }
+    )
+    writer = fake_writer()
+    RazorpayTestRail(client, CONFIG, links=writer).create_pay_now_link("sub_1", NOW)
+    assert "name" not in writer.created[0]["customer"]
+
+
+def test_a_full_contact_still_sends_every_field():
+    """The omission is for absent values only; nothing is dropped otherwise."""
+    writer = fake_writer()
+    RazorpayTestRail(fake_client(), CONFIG, links=writer).create_pay_now_link("sub_1", NOW)
+    assert set(writer.created[0]["customer"]) == {"name", "email", "contact"}
+
+
+def test_declining_to_assert_payment_is_itself_recorded(tmp_path):
+    """The reconstruct must not go quiet at the one point it says nothing.
+
+    ``create_pay_now_link`` audits both outcomes and Task 8's reconciliation
+    audits the eventual payment. Between them sat a decision that recorded
+    nothing: asked whether the customer paid, the live rail always answers no,
+    deliberately, because conversion is not knowable at send time. A reader
+    replaying the subject saw a link created and then silence, which reads like
+    a gap in the evidence rather than the refusal it is. Every other deliberate
+    refusal in this codebase names itself in the log.
+    """
+    audit = AuditLog(tmp_path / "a.db")
+    rail = RazorpayTestRail(fake_client(), CONFIG, links=fake_writer(), audit=audit)
+    assert rail.deliver_pay_now_link("sub_1", NOW) is False
+    records = [
+        r for r in audit.reconstruct("sub_1") if r.stage == "pay_now_link_payment_unknown"
+    ]
+    assert records, "the rail refused to assert payment and left no trace of doing so"
+    assert "reconcil" in records[0].payload["detail"].lower()
+
+
+def test_the_delivery_record_does_not_appear_without_an_audit_log():
+    """A rail built with no audit handle still answers, it just cannot record."""
+    rail = RazorpayTestRail(fake_client(), CONFIG, links=fake_writer())
+    assert rail.deliver_pay_now_link("sub_1", NOW) is False

@@ -135,8 +135,22 @@ class RazorpayTestRail:
         ``customer_contact`` directly at the top level -- there is no nested
         ``customer`` object and no name field. Never invented: a subscription
         with neither email nor contact yields ``None`` rather than a
-        placeholder address nobody can receive mail at, and the name is left
-        blank rather than fabricated when nothing better is available.
+        placeholder address nobody can receive mail at.
+
+        A field we do not have is **omitted, not sent empty**. Razorpay
+        validates ``customer.contact`` server-side -- the API findings record a
+        live 400 on a number it did not accept -- and ``""`` is not an absence,
+        it is a claim to have a value. Everywhere else this project refuses to
+        supply a placeholder rather than supply a wrong one; the wire body is
+        not an exception to that.
+
+        On the recorded live entity (``tests/fixtures/entity_shapes.json``)
+        ``customer_id`` comes back ``null`` and ``notes`` comes back as a *list*,
+        so in practice **neither name fallback fires and the link goes out with
+        no customer name at all**. Both branches are kept because other Razorpay
+        entities do carry a ``notes`` object and a customer id, and the type
+        checks make them harmless where they do not -- but nobody should read
+        this and expect a name.
         """
         entity = self.fetch_subscription(subscription_id)
         email = str(entity.get("customer_email") or "")
@@ -149,11 +163,8 @@ class RazorpayTestRail:
             name = str(notes.get("name") or notes.get("customer_name") or "")
         if not name:
             name = str(entity.get("customer_id") or "")
-        return {
-            "name": name,
-            "email": email,
-            "contact": contact,
-        }
+        customer = {"name": name, "email": email, "contact": contact}
+        return {key: value for key, value in customer.items() if value}
 
     def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
         """Create a real Razorpay Payment Link and return its short URL."""
@@ -202,8 +213,30 @@ class RazorpayTestRail:
         """Whether the customer paid is not knowable here.
 
         Always False. Conversion is an event that arrives later, through the
-        webhook or the scanner's reconciliation (Task 8). Returning True would
-        assert a payment that has not happened, which is the same fabrication
+        webhook or the scanner's reconciliation. Returning True would assert a
+        payment that has not happened, which is the same fabrication
         ``charge()`` raises to prevent.
+
+        The refusal is recorded. ``create_pay_now_link`` audits both of its
+        outcomes and reconciliation audits the eventual payment; without a
+        record here, a reader replaying the subject saw a link created and then
+        silence, which reads like a hole in the evidence rather than the
+        deliberate answer it is. Every other refusal in this codebase names
+        itself in the log, and this one costs one row.
         """
+        if self._audit is not None:
+            self._audit.append(
+                new_record(
+                    subscription_id,
+                    now,
+                    "pay_now_link_payment_unknown",
+                    {
+                        "paid": False,
+                        "detail": (
+                            "payment cannot be observed at send time; conversion arrives "
+                            "later via webhook or link reconciliation"
+                        ),
+                    },
+                )
+            )
         return False

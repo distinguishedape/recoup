@@ -13,7 +13,7 @@ from recoup.execute.executor import (
     cost_of,
     render_context_for,
 )
-from recoup.execute.rail import SimSubject, SimulatedRail, canonical_decline
+from recoup.execute.rail import ChargeResult, SimSubject, SimulatedRail, canonical_decline
 from recoup.models.core import Action, Subscription
 from recoup.models.enums import ActionType, Band, FailureClass, Tier
 from recoup.policy.engine import authorize
@@ -70,11 +70,29 @@ def render_context():
 
 class ConfigurablePayNowRail:
     """A rail double for pay-now tests: link creation and conversion are each
-    configurable directly, independent of SimulatedRail's probability model."""
+    configurable directly, independent of SimulatedRail's probability model.
+
+    It implements the whole of ``PaymentRail``, not only the two methods these
+    tests exercise. A partial double passes until something finally calls the
+    missing method, which is how Task 6's breakage reached a suite of 590 green
+    tests; ``tests/execute/test_rail_conformance.py`` now checks this class
+    against the Protocol so it cannot drift again. The two methods this double
+    does not simulate raise rather than returning a plausible value, because a
+    test that accidentally routes a charge through here should say so loudly
+    instead of quietly measuring a fabricated outcome.
+    """
 
     def __init__(self, link_url: str | None, converts: bool) -> None:
         self._link_url = link_url
         self._converts = converts
+
+    def charge(self, subscription_id: str, now: datetime) -> ChargeResult:
+        raise NotImplementedError("ConfigurablePayNowRail models pay-now links, not charges")
+
+    def deliver_update_request(self, subscription_id: str, now: datetime) -> bool:
+        raise NotImplementedError(
+            "ConfigurablePayNowRail models pay-now links, not instrument updates"
+        )
 
     def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
         return self._link_url

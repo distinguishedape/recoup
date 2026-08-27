@@ -13,7 +13,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from recoup.experiment.harness import freeze_config, verify_frozen_config
+from recoup.experiment.harness import (
+    ConfigurationDrift,
+    freeze_config,
+    verify_frozen_config,
+)
 from recoup.experiment.replication import run_replication
 from recoup.experiment.sweep import run_sweep
 from recoup.llm.client import LLMClient
@@ -49,12 +53,6 @@ def main(argv: list[str] | None = None) -> int:
         start_at=datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc),
     )
 
-    frozen_path = args.out_dir / "frozen_config.json"
-    if args.freeze:
-        print(f"frozen configuration hash: {freeze_config(config, frozen_path)}")
-    if args.verify_frozen:
-        print(f"configuration verified unchanged: {verify_frozen_config(config, frozen_path)}")
-
     # Without this the runner sees no API key, every cache miss falls back to
     # UNCLASSIFIED, and the "with model" arm quietly becomes a partial one. An
     # entire evidence bundle was published that way: 930 of 1542 ambiguous
@@ -63,6 +61,32 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.setdefault(key, value)
 
     client = None if args.no_llm else LLMClient(args.out_dir / "llm_cache.json")
+    model = client.model if client is not None else None
+
+    frozen_path = args.out_dir / "frozen_config.json"
+    if args.freeze:
+        print(f"frozen configuration hash: {freeze_config(config, frozen_path, model)}")
+    elif frozen_path.exists():
+        # Checked whether or not --verify-frozen was passed. The published
+        # command never passed it, so the guard it names could not have caught
+        # the edited prompt that moved dead-card money by Rs 45,475 under an
+        # unchanged hash. It runs before the sweep because a refusal two
+        # minutes in teaches people to reach for the override.
+        try:
+            verify_frozen_config(config, frozen_path, model)
+        except ConfigurationDrift as drift:
+            print(
+                f"refusing to run: {drift}\n"
+                "Re-run with --freeze to register the change deliberately, which is what "
+                "makes it visible in the bundle rather than silent in the numbers.",
+                file=sys.stderr,
+            )
+            return 1
+    if args.verify_frozen:
+        print(
+            "configuration verified unchanged: "
+            f"{verify_frozen_config(config, frozen_path, model)}"
+        )
     sweep = run_sweep(config, args.out_dir / "audit", client)
 
     replication = None

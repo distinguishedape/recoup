@@ -125,3 +125,15 @@ def test_the_report_declares_the_pay_now_conversion_it_assumed(sweep):
     assert "pay-now link conversion" in report
     for band in Band:
         assert f"{BANDS[band].pay_now_conversion * 100:.0f}%" in report
+
+
+def test_the_report_prints_the_measurement_inputs_hash(sweep):
+    """The configuration hash covers the seed and the cohort. It does not cover
+    the prompts, probabilities, budgets or schedule -- and it was those that
+    moved the published numbers while it stayed the same. A reader comparing
+    two bundles needs the digest that would have differed."""
+    from recoup.experiment.inputs import inputs_hash
+
+    report = render_report(sweep)
+    assert "measurement inputs" in report.lower()
+    assert inputs_hash() in report
