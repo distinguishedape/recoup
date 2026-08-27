@@ -264,6 +264,19 @@ def test_instrument_update_recoveries_are_distinguished_from_plain_retries(audit
     assert all(o.recovered_via == "instrument_update" for o in invalid)
 
 
+def test_a_paid_pay_now_link_reaches_recovered_via_end_to_end(audit):
+    # Regression: PAY_NOW_LINK falls into the ladder's generic contact branch,
+    # so a customer who actually pays via the link was never marked recovered
+    # at all -- earning no gross and no recovered_via -- and the report would
+    # have measured the link as worth exactly zero. This is the test that
+    # proves the value is reachable end to end.
+    result = run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    via_link = [o for o in result.outcomes if o.recovered_via == "pay_now_link"]
+    assert via_link, "no subject recovered via a pay-now link"
+    assert all(o.terminal is TerminalState.RECOVERED for o in via_link)
+    assert all(o.gross_recovered_paise > 0 for o in via_link)
+
+
 def test_a_subject_never_recovered_carries_no_recovery_mechanism(audit):
     result = run_recoup_arm(config(cohort_size=100, seed=3), audit)
     unrecovered = [o for o in result.outcomes if o.terminal is not TerminalState.RECOVERED]

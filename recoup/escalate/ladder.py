@@ -88,6 +88,15 @@ def record_execution(state: LadderState, action: Action, succeeded: bool) -> Non
         state.charge_retries_used += 1
         if succeeded:
             state.recovered = True
+    elif action.type is ActionType.PAY_NOW_LINK:
+        # Still a contact -- it obeys the contact window, the 24-hour gap and
+        # the contact budget like every other message -- but a paid link is
+        # also a recovery in its own right, not merely something sent. Both
+        # must be recorded, or a customer who pays via the link is counted as
+        # contacted and nothing else.
+        state.contacts_sent += 1
+        if succeeded:
+            state.recovered = True
     elif action.type in CONTACT_ACTION_TYPES:
         state.contacts_sent += 1
     elif action.type is ActionType.ESCALATE_MANUAL_REVIEW:

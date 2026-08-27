@@ -102,6 +102,23 @@ def test_a_successful_message_does_not_mark_the_subject_recovered():
     assert s.recovered is False
 
 
+def test_a_successful_pay_now_link_marks_the_subject_recovered_and_spends_a_contact():
+    # A paid link is a recovery in its own right, not merely a message sent --
+    # but it still counts against the contact budget like every other contact.
+    s = state()
+    record_execution(s, action(ActionType.PAY_NOW_LINK, Tier.T2_REQUEST_ACTION), succeeded=True)
+    assert s.recovered is True
+    assert s.contacts_sent == 1
+
+
+def test_an_unpaid_pay_now_link_spends_a_contact_without_recovering():
+    # Delivered but not yet paid still cost a contact.
+    s = state()
+    record_execution(s, action(ActionType.PAY_NOW_LINK, Tier.T2_REQUEST_ACTION), succeeded=False)
+    assert s.recovered is False
+    assert s.contacts_sent == 1
+
+
 def test_an_escalation_action_flags_manual_review():
     s = state(FailureClass.RISK_DECLINE)
     record_execution(s, action(ActionType.ESCALATE_MANUAL_REVIEW, Tier.T4_TERMINAL), True)

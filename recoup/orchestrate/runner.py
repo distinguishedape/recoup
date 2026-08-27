@@ -285,6 +285,10 @@ def run_recoup_arm(
                 sub_id,
                 "instrument_update" if context.replacement_instrument_id else "retry",
             )
+        elif result.succeeded and action.type is ActionType.PAY_NOW_LINK:
+            recovered_at.setdefault(sub_id, now)
+            recovered_tier.setdefault(sub_id, int(action.tier))
+            recovered_via.setdefault(sub_id, "pay_now_link")
         record_execution(state, action, result.succeeded)
         if action.type in CONTACT_ACTION_TYPES:
             last_contact[sub_id] = now
