@@ -32,6 +32,7 @@ def test_action_types_cover_every_thing_the_pipeline_can_do():
         "retry_charge",
         "request_instrument_update",
         "send_message",
+        "pay_now_link",
         "stop",
         "escalate_manual_review",
     }
