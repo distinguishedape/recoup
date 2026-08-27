@@ -16,6 +16,7 @@ import hashlib
 import random
 from collections import defaultdict
 from datetime import datetime, timedelta
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -77,6 +78,12 @@ class SubjectOutcome(BaseModel):
     recovered_at_tier: int | None = None
     """Which escalation tier actually landed the recovery, so the report can
     say how far up the ladder subjects had to travel to be worth the trip."""
+    recovered_via: Literal["retry", "pay_now_link", "instrument_update"] | None = None
+    """Which mechanism earned the recovery, set at the point of recovery
+    rather than inferred afterwards from action history, so the report can
+    say how much of the lift a pay-now link is actually responsible for.
+    Defaulted to ``None`` so the control arm's construction -- which has no
+    payment links and never will -- keeps working unchanged."""
 
 
 class RunResult(BaseModel):
@@ -134,6 +141,7 @@ def run_recoup_arm(
     first_failure_at: dict[str, datetime] = {}
     recovered_at: dict[str, datetime] = {}
     recovered_tier: dict[str, int] = {}
+    recovered_via: dict[str, str] = {}
 
     for event in cohort.events:
         sub_id = event.subscription_id
@@ -273,6 +281,10 @@ def run_recoup_arm(
         if result.succeeded and action.type is ActionType.RETRY_CHARGE:
             recovered_at.setdefault(sub_id, now)
             recovered_tier.setdefault(sub_id, int(action.tier))
+            recovered_via.setdefault(
+                sub_id,
+                "instrument_update" if context.replacement_instrument_id else "retry",
+            )
         record_execution(state, action, result.succeeded)
         if action.type in CONTACT_ACTION_TYPES:
             last_contact[sub_id] = now
@@ -325,6 +337,7 @@ def run_recoup_arm(
                 first_failure_at=first_failure_at.get(sub_id),
                 recovered_at=recovered_at.get(sub_id),
                 recovered_at_tier=recovered_tier.get(sub_id),
+                recovered_via=recovered_via.get(sub_id),
             )
         )
 

@@ -244,6 +244,33 @@ def test_some_dead_card_subjects_recover_once_they_supply_a_new_instrument(audit
     assert recovered, "the instrument-update intervention recovered nobody"
 
 
+def test_a_recovery_records_which_mechanism_earned_it(audit):
+    result = run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    recovered = [o for o in result.outcomes if o.terminal is TerminalState.RECOVERED]
+    assert recovered
+    assert all(o.recovered_via is not None for o in recovered)
+    assert all(o.recovered_via for o in recovered if o.recovered_via in {"retry", "instrument_update"})
+
+
+def test_instrument_update_recoveries_are_distinguished_from_plain_retries(audit):
+    result = run_recoup_arm(config(cohort_size=200, seed=3), audit)
+    invalid = [
+        o
+        for o in result.outcomes
+        if o.failure_class is FailureClass.INSTRUMENT_INVALID
+        and o.terminal is TerminalState.RECOVERED
+    ]
+    assert invalid, "no dead-card subject recovered to check recovered_via against"
+    assert all(o.recovered_via == "instrument_update" for o in invalid)
+
+
+def test_a_subject_never_recovered_carries_no_recovery_mechanism(audit):
+    result = run_recoup_arm(config(cohort_size=100, seed=3), audit)
+    unrecovered = [o for o in result.outcomes if o.terminal is not TerminalState.RECOVERED]
+    assert unrecovered
+    assert all(o.recovered_via is None for o in unrecovered)
+
+
 def test_a_blocked_notification_does_not_also_kill_the_retries_behind_it(audit):
     # Regression. A planner that placed retries a tier above the notification
     # had every retry blocked as tier_not_open whenever the notification fell

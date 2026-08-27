@@ -241,3 +241,49 @@ def scan(
 
 def at_risk_paise(signals: Iterable[RiskSignal]) -> int:
     return sum(s.amount_paise for s in signals)
+
+
+PAID_LINK_STATES = frozenset({"paid"})
+
+
+class LinkOutcome(BaseModel):
+    """Whether one payment link the agent created was actually paid.
+
+    ``reference_id`` carries the subscription id set at link creation, which
+    is what ties a payment back to the subject that earned it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    link_id: str
+    reference_id: str
+    status: str
+    amount_paise: int = Field(ge=0)
+    paid: bool
+
+
+def reconcile_pay_now_links(
+    client: RazorpayReadClient, now: datetime
+) -> list[LinkOutcome]:
+    """Which of the links we created were actually paid.
+
+    The rail cannot know this at send time and deliberately refuses to guess,
+    so this is where a pay-now recovery is confirmed. ``reference_id`` carries
+    the subscription id we set at creation, which is what ties a payment back
+    to the subject that earned it.
+    """
+    outcomes: list[LinkOutcome] = []
+    for link in client.payment_links():
+        reference = str(link.get("reference_id") or "")
+        if not reference:
+            continue
+        status = str(link.get("status", ""))
+        outcomes.append(
+            LinkOutcome(
+                link_id=str(link.get("id")),
+                reference_id=reference,
+                status=status,
+                amount_paise=int(link.get("amount_paid") or 0),
+                paid=status in PAID_LINK_STATES,
+            )
+        )
+    return outcomes

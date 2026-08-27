@@ -89,6 +89,10 @@ class RazorpayReadClient:
     def payments(self, **params: Any) -> list[dict[str, Any]]:
         return self._items("payments", **params)
 
+    def payment_links(self, **params: Any) -> list[dict[str, Any]]:
+        """Payment links. ``status`` is created / partially_paid / paid / cancelled / expired."""
+        return self._items("payment_links", **params)
+
     def payments_for_order(self, order_id: str) -> list[dict[str, Any]]:
         """The attempts made against one order.
 

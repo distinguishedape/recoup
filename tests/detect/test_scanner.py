@@ -12,6 +12,7 @@ import pytest
 from recoup.detect.scanner import (
     RiskKind,
     at_risk_paise,
+    reconcile_pay_now_links,
     scan,
     scan_invoices,
     scan_orders,
@@ -65,6 +66,12 @@ RESPONSES = {
         {"id": "sub_halted", "status": "halted", "created_at": ago(days=40),
          "charge_at": ago(days=2)},
         {"id": "sub_active", "status": "active", "created_at": ago(days=10)},
+    ],
+    "payment_links": [
+        {"id": "plink_a", "reference_id": "sub_paid", "status": "paid",
+         "amount": 99900, "amount_paid": 99900},
+        {"id": "plink_b", "reference_id": "sub_open", "status": "created",
+         "amount": 49900, "amount_paid": 0},
     ],
 }
 
@@ -148,3 +155,23 @@ def test_nothing_in_the_read_client_can_write():
     source = inspect.getsource(module)
     for verb in ('"POST"', '"PUT"', '"PATCH"', '"DELETE"', "method="):
         assert verb not in source, f"the read client should not be able to {verb}"
+
+
+def test_a_paid_link_is_reported_as_a_recovery(client):
+    outcomes = {o.reference_id: o for o in reconcile_pay_now_links(client, NOW)}
+    assert outcomes["sub_paid"].status == "paid"
+    assert outcomes["sub_paid"].amount_paise == 99900
+
+
+def test_an_unpaid_link_is_not_a_recovery(client):
+    outcomes = {o.reference_id: o for o in reconcile_pay_now_links(client, NOW)}
+    assert outcomes["sub_open"].status != "paid"
+
+
+def test_reconciliation_only_reads():
+    import inspect
+    from recoup.razorpay import client as module
+
+    source = inspect.getsource(module)
+    for verb in ('"POST"', '"PUT"', '"PATCH"', '"DELETE"'):
+        assert verb not in source
