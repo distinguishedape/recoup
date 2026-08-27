@@ -91,7 +91,21 @@ def build_plan(
             channel="email",
             template_id="t1_notify_email",
         )
-        for delay in FUNDS_RETRY_DELAYS_HOURS:
+        add(
+            ActionType.RETRY_CHARGE,
+            FUNDS_RETRY_DELAYS_HOURS[0],
+            Tier.T1_NOTIFY,
+            f"retry {FUNDS_RETRY_DELAYS_HOURS[0]}h later, when a salary or transfer may have landed",
+        )
+        add(
+            ActionType.PAY_NOW_LINK,
+            FUNDS_RETRY_DELAYS_HOURS[0] + 1,
+            Tier.T2_REQUEST_ACTION,
+            "offer a way to pay from another source, since the money may exist elsewhere",
+            channel="email",
+            template_id="t2_pay_now_email",
+        )
+        for delay in FUNDS_RETRY_DELAYS_HOURS[1:]:
             add(
                 ActionType.RETRY_CHARGE,
                 delay,
@@ -151,7 +165,22 @@ def build_plan(
             channel="email",
             template_id="t1_notify_email",
         )
-        for delay in UNCLASSIFIED_RETRY_DELAYS_HOURS:
+        add(
+            ActionType.RETRY_CHARGE,
+            UNCLASSIFIED_RETRY_DELAYS_HOURS[0],
+            Tier.T1_NOTIFY,
+            f"baseline ladder retry at {UNCLASSIFIED_RETRY_DELAYS_HOURS[0]}h with no root cause to act on",
+        )
+        add(
+            ActionType.PAY_NOW_LINK,
+            UNCLASSIFIED_RETRY_DELAYS_HOURS[0] + 1,
+            Tier.T2_REQUEST_ACTION,
+            "offer a way to pay from another source, since the root cause is unclear and the "
+            "money may exist elsewhere",
+            channel="email",
+            template_id="t2_pay_now_unclear_email",
+        )
+        for delay in UNCLASSIFIED_RETRY_DELAYS_HOURS[1:]:
             add(
                 ActionType.RETRY_CHARGE,
                 delay,

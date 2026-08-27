@@ -28,12 +28,12 @@ class Budget(BaseModel):
 
 
 BUDGETS: dict[FailureClass, Budget] = {
-    FailureClass.INSUFFICIENT_FUNDS: Budget(charge_retries=3, contacts=1),
+    FailureClass.INSUFFICIENT_FUNDS: Budget(charge_retries=3, contacts=2),
     FailureClass.INSTRUMENT_INVALID: Budget(charge_retries=0, contacts=2),
     FailureClass.MANDATE_REVOKED: Budget(charge_retries=0, contacts=0),
     FailureClass.TRANSIENT_ISSUER: Budget(charge_retries=3, contacts=0),
     FailureClass.RISK_DECLINE: Budget(charge_retries=0, contacts=0),
-    FailureClass.UNCLASSIFIED: Budget(charge_retries=3, contacts=1),
+    FailureClass.UNCLASSIFIED: Budget(charge_retries=3, contacts=2),
 }
 
 CONTACT_ACTION_TYPES: frozenset[ActionType] = frozenset(

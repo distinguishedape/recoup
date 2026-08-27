@@ -1275,3 +1275,46 @@ production data.
   which is the entire thing the compliance machinery buys.
 - **Cost constants remain declared assumptions.** Real Razorpay pricing would be the single
   most valuable substitution.
+
+## Phase 14 — The pay-now link reaches the planner
+
+### D59. The shortfall and unclassified budgets were widened before the link was measured
+
+`INSUFFICIENT_FUNDS` and `UNCLASSIFIED` are the two causes another route (D34, D51) already
+answers with an ambiguous or a recoverable-if-waited-out signal, so they are the two causes
+`pay_now_link` is permitted for (`PAY_NOW_ELIGIBLE_CLASSES`, enforced twice: the planner's
+prompt tells the model, and `pay_now_link_causes` refuses it at the policy gate regardless of
+what the planner proposed). The deterministic planner now offers the link on both, scheduled
+one hour after the first retry: if the retry did not clear on its own, offer a way to pay from
+another source rather than only waiting on the same instrument again.
+
+Both classes' `contacts` budget moves from 1 to 2 to fit it (`recoup/plan/budgets.py`). The
+existing `t1_notify_email` already spends the one contact either class had; without the
+widening, `clamp_to_budget` would silently drop the link and the plan would offer nothing new
+while looking unchanged.
+
+The justification, stated before anything was re-run:
+
+> The budget exists to prevent *waste* — attempts on causes that cannot succeed — not to be
+> thrifty on causes that can recover. Two contacts across a five-day window — one telling the
+> customer what happened, one giving them a way to act on it — is not harassment. The contact
+> window and the 24-hour minimum gap between contacts still bound when the two land; only the
+> count within that structure moved.
+
+**This is the opposite of D40's sequence, and the difference matters.** D40 disclosed a budget
+change made *after* seeing a loss, which is exactly what pre-registration guards against. This
+one was made for a structural reason — the new action needs the room to fit, on both classes it
+applies to — before Task 9 re-measures its effect. If the link turns out not to earn its keep,
+that will show up as a bad number honestly attributed to a deliberate design choice, not as a
+budget quietly adjusted to make one look better.
+
+**Known follow-up, out of this task's scope.** Making the planner actually able to produce a
+`PAY_NOW_LINK` action surfaced four failures elsewhere in the suite that Task 6 was scoped not
+to fix (`recoup/execute/`, `recoup/policy/`, `recoup/live/`, and their tests, were explicitly
+off-limits): two `tests/live/test_agent.py` doubles (`FakeRail`, `RefusingRail`) do not
+implement `create_pay_now_link` / `deliver_pay_now_link` and raise `AttributeError` the first
+time a live-agent scenario schedules one; `tests/policy/test_rules.py::test_a_contact_beyond_
+the_class_budget_is_denied` and `tests/escalate/test_ladder.py::test_a_subject_with_both_
+budgets_spent_is_exhausted` both hardcode the old `contacts=1` ceiling for
+`INSUFFICIENT_FUNDS`. All four are the budget widening reaching fixtures that assumed the old
+number, not a defect in the widening itself, and need a fix in files this task did not touch.

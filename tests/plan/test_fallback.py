@@ -41,11 +41,14 @@ def test_every_class_gets_a_plan_that_respects_its_budget(failure_class):
 
 
 def test_insufficient_funds_notifies_then_chases_the_pay_cycle():
+    # After the first retry the plan now also offers a pay-now link: one
+    # message telling the customer, one giving them a way to act.
     plan = build_plan(event(), classification(FailureClass.INSUFFICIENT_FUNDS), NOW)
     types = [a.type for a in plan.actions]
     assert types == [
         ActionType.SEND_MESSAGE,
         ActionType.RETRY_CHARGE,
+        ActionType.PAY_NOW_LINK,
         ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
     ]
@@ -125,3 +128,34 @@ def test_the_plan_is_deterministic():
     first = build_plan(event(), classification(FailureClass.UNCLASSIFIED), NOW)
     second = build_plan(event(), classification(FailureClass.UNCLASSIFIED), NOW)
     assert first == second
+
+
+def test_a_shortfall_plan_offers_a_pay_now_link_after_the_first_retry():
+    plan = build_plan(event(), classification(FailureClass.INSUFFICIENT_FUNDS), NOW)
+    types = [a.type for a in plan.actions]
+    assert ActionType.PAY_NOW_LINK in types
+    # T1 notify comes first; the link is a T2 request for action
+    link = next(a for a in plan.actions if a.type is ActionType.PAY_NOW_LINK)
+    assert link.tier is Tier.T2_REQUEST_ACTION
+    assert link.template_id == "t2_pay_now_email"
+
+
+def test_an_unclear_cause_offers_a_link_with_its_own_wording():
+    plan = build_plan(event(), classification(FailureClass.UNCLASSIFIED), NOW)
+    link = next(a for a in plan.actions if a.type is ActionType.PAY_NOW_LINK)
+    assert link.template_id == "t2_pay_now_unclear_email"
+
+
+def test_no_other_cause_plans_a_pay_now_link():
+    for cls in (FailureClass.INSTRUMENT_INVALID, FailureClass.TRANSIENT_ISSUER,
+                FailureClass.RISK_DECLINE, FailureClass.MANDATE_REVOKED):
+        plan = build_plan(event(), classification(cls), NOW)
+        assert all(a.type is not ActionType.PAY_NOW_LINK for a in plan.actions), cls
+
+
+def test_the_link_respects_the_contact_budget():
+    """INSUFFICIENT_FUNDS allows 2 contacts. A notify plus a link is 2, so both
+    fit -- and the plan must not silently exceed the budget."""
+    plan = build_plan(event(), classification(FailureClass.INSUFFICIENT_FUNDS), NOW)
+    contacts = [a for a in plan.actions if a.type in CONTACT_ACTION_TYPES]
+    assert len(contacts) <= budget_for(FailureClass.INSUFFICIENT_FUNDS).contacts

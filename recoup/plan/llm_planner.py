@@ -47,6 +47,8 @@ allowed template ids and must not include a `free_text` field.
 proposing more than the budget loses the whole plan rather than extending it.
 - Never propose a charge retry for a cause a retry cannot fix (an invalid instrument, \
 a revoked mandate, a risk block).
+- `pay_now_link` is ONLY valid for INSUFFICIENT_FUNDS and UNCLASSIFIED. Proposing it for any \
+other cause will be refused by the policy engine and the whole plan will score as worse.
 - `delay_hours` must be between 0 and {MAX_DELAY_HOURS}.
 - At most {MAX_ACTIONS} actions.
 - Do not include a stop or an escalation alongside actions scheduled at or after
@@ -106,7 +108,11 @@ def _parse_action(raw: dict, subscription_id: str, index: int, now: datetime) ->
     channel = raw.get("channel") or None
     if template_id is not None and template_id not in ALLOWED_TEMPLATE_IDS:
         return None
-    if action_type in {ActionType.SEND_MESSAGE, ActionType.REQUEST_INSTRUMENT_UPDATE}:
+    if action_type in {
+        ActionType.SEND_MESSAGE,
+        ActionType.REQUEST_INSTRUMENT_UPDATE,
+        ActionType.PAY_NOW_LINK,
+    }:
         if template_id is None or channel is None:
             return None
 

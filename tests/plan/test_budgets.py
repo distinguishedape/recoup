@@ -26,18 +26,23 @@ def act(index: int, action_type: ActionType) -> Action:
 @pytest.mark.parametrize(
     ("failure_class", "retries", "contacts"),
     [
-        (FailureClass.INSUFFICIENT_FUNDS, 3, 1),
+        (FailureClass.INSUFFICIENT_FUNDS, 3, 2),
         (FailureClass.INSTRUMENT_INVALID, 0, 2),
         (FailureClass.MANDATE_REVOKED, 0, 0),
         (FailureClass.TRANSIENT_ISSUER, 3, 0),
         (FailureClass.RISK_DECLINE, 0, 0),
-        (FailureClass.UNCLASSIFIED, 3, 1),
+        (FailureClass.UNCLASSIFIED, 3, 2),
     ],
 )
 def test_budgets_match_the_spec_table(failure_class, retries, contacts):
     # The zero rows are the product's actual claim: causes a retry cannot fix
     # get none. The non-zero rows match what the baseline spends, because
     # under-spending a recoverable cause destroys value to save a few rupees.
+    # INSUFFICIENT_FUNDS and UNCLASSIFIED carry 2 contacts, not 1: the notify
+    # already spends one, and a pay-now link -- offering a way to act, not just
+    # telling them -- spends the other. Two contacts across a five-day window
+    # is not harassment, and this was widened before the pay-now link was
+    # measured, for a structural reason (see docs/decisions.md).
     budget = budget_for(failure_class)
     assert budget.charge_retries == retries
     assert budget.contacts == contacts

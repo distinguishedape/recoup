@@ -64,6 +64,57 @@ def test_the_system_prompt_states_the_budget_and_the_allowlist():
     assert "free text" in PLANNER_SYSTEM.lower()
 
 
+def test_the_system_prompt_allows_pay_now_link_and_states_its_restriction():
+    # The allowed-action list is derived from the enum, so pay_now_link is
+    # already there; what must be spelled out is that it is only valid for
+    # two causes, so the model does not propose it elsewhere.
+    assert "pay_now_link" in PLANNER_SYSTEM
+    assert "INSUFFICIENT_FUNDS" in PLANNER_SYSTEM
+    assert "UNCLASSIFIED" in PLANNER_SYSTEM
+
+
+def test_a_pay_now_link_proposal_without_a_template_is_rejected(tmp_path):
+    # pay_now_link is customer-facing like send_message and
+    # request_instrument_update, so it must also name a template and channel
+    # -- caught here at validation rather than falling through to a policy
+    # denial with no template_id at all.
+    bad = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "pay_now_link",
+                    "delay_hours": 25,
+                    "tier": 2,
+                    "channel": None,
+                    "template_id": None,
+                    "reason": "offer a way to pay",
+                }
+            ]
+        }
+    )
+    assert propose_plan(event(), classification(), client_returning(bad, tmp_path), NOW) is None
+
+
+def test_a_well_formed_pay_now_link_proposal_is_accepted(tmp_path):
+    good = json.dumps(
+        {
+            "actions": [
+                {
+                    "type": "pay_now_link",
+                    "delay_hours": 25,
+                    "tier": 2,
+                    "channel": "email",
+                    "template_id": "t2_pay_now_email",
+                    "reason": "offer a way to pay from another source",
+                }
+            ]
+        }
+    )
+    result = propose_plan(event(), classification(), client_returning(good, tmp_path), NOW)
+    assert result is not None
+    assert result.actions[0].type is ActionType.PAY_NOW_LINK
+
+
 def test_a_valid_proposal_is_turned_into_a_plan(tmp_path):
     result = propose_plan(event(), classification(), client_returning(GOOD, tmp_path), NOW)
     assert result is not None
@@ -199,6 +250,7 @@ def test_plan_falls_back_to_the_deterministic_planner_when_the_proposal_is_unusa
     assert [a.type for a in result.actions] == [
         ActionType.SEND_MESSAGE,
         ActionType.RETRY_CHARGE,
+        ActionType.PAY_NOW_LINK,
         ActionType.RETRY_CHARGE,
         ActionType.RETRY_CHARGE,
     ]
