@@ -20,8 +20,10 @@ intervention depends on (spike finding F7).
 from datetime import datetime
 from typing import Any, Protocol
 
+from recoup.audit.log import AuditLog, new_record
 from recoup.execute.rail import ChargeResult
 from recoup.razorpay.config import LiveModeRefused, RazorpayConfig
+from recoup.razorpay.payment_links import PaymentLinkWriter
 
 CARD_CHANGE_PARAM = "subscription_card_change=1"
 
@@ -45,7 +47,13 @@ def build_client(config: RazorpayConfig) -> RazorpayClient:
 
 
 class RazorpayTestRail:
-    def __init__(self, client: RazorpayClient, config: RazorpayConfig) -> None:
+    def __init__(
+        self,
+        client: RazorpayClient,
+        config: RazorpayConfig,
+        links: PaymentLinkWriter | None = None,
+        audit: AuditLog | None = None,
+    ) -> None:
         if not config.is_test_mode:
             raise LiveModeRefused(
                 f"key id {config.key_id!r} is not a test-mode key; "
@@ -53,6 +61,8 @@ class RazorpayTestRail:
             )
         self._client = client
         self._config = config
+        self._links = links
+        self._audit = audit
 
     def fetch_subscription(self, subscription_id: str) -> dict[str, Any]:
         try:
@@ -81,3 +91,95 @@ class RazorpayTestRail:
 
     def deliver_update_request(self, subscription_id: str, now: datetime) -> bool:
         return bool(self.card_change_link(subscription_id))
+
+    def _amount_for(self, subscription_id: str) -> int | None:
+        """The amount owed, read from the subscription entity itself.
+
+        Never guessed: a plan amount that cannot be found is ``None``, not a
+        stand-in figure that would let a link go out for the wrong sum.
+        """
+        entity = self.fetch_subscription(subscription_id)
+        amount = entity.get("amount")
+        if amount is None:
+            plan = entity.get("plan")
+            if isinstance(plan, dict):
+                amount = plan.get("amount")
+        if amount is None:
+            return None
+        try:
+            return int(amount)
+        except (TypeError, ValueError):
+            return None
+
+    def _customer_for(self, subscription_id: str) -> dict[str, str] | None:
+        """The customer contact, read from the subscription entity itself.
+
+        Never invented: a subscription with no email and no phone yields
+        ``None`` rather than a placeholder address nobody can receive mail at.
+        """
+        entity = self.fetch_subscription(subscription_id)
+        customer = entity.get("customer")
+        if not isinstance(customer, dict):
+            return None
+        email = str(customer.get("email") or "")
+        contact = str(customer.get("contact") or "")
+        if not email and not contact:
+            return None
+        return {
+            "name": str(customer.get("name") or ""),
+            "email": email,
+            "contact": contact,
+        }
+
+    def create_pay_now_link(self, subscription_id: str, now: datetime) -> str | None:
+        """Create a real Razorpay Payment Link and return its short URL."""
+        if self._links is None:
+            return None
+        amount = self._amount_for(subscription_id)
+        customer = self._customer_for(subscription_id)
+        if amount is None or customer is None:
+            # Never guess an amount or invent an email address. A link that
+            # cannot be built correctly is not built at all.
+            if self._audit is not None:
+                self._audit.append(
+                    new_record(
+                        subscription_id,
+                        now,
+                        "pay_now_link_unavailable",
+                        {"missing": "amount" if amount is None else "customer contact"},
+                    )
+                )
+            return None
+        link = self._links.create(
+            amount_paise=amount,
+            reference_id=subscription_id,
+            description="Subscription payment",
+            customer=customer,
+        )
+        if self._audit is not None:
+            # Spec R-A2: the created link is evidence and must be recoverable
+            # from the log, not only from the Razorpay dashboard.
+            self._audit.append(
+                new_record(
+                    subscription_id,
+                    now,
+                    "pay_now_link_created",
+                    {
+                        "link_id": link.id,
+                        "short_url": link.short_url,
+                        "status": link.status,
+                        "notified": False,
+                    },
+                )
+            )
+        return link.short_url
+
+    def deliver_pay_now_link(self, subscription_id: str, now: datetime) -> bool:
+        """Whether the customer paid is not knowable here.
+
+        Always False. Conversion is an event that arrives later, through the
+        webhook or the scanner's reconciliation (Task 8). Returning True would
+        assert a payment that has not happened, which is the same fabrication
+        ``charge()`` raises to prevent.
+        """
+        return False

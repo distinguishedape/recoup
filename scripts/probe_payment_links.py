@@ -9,7 +9,7 @@ Razorpay rate-limits burst writes on test accounts and answers
 retry with exponential backoff rather than giving up on the first brush
 with the limiter.
 """
-import base64, json, os, time, urllib.request, urllib.error
+import base64, json, os, sys, time, urllib.request, urllib.error
 from recoup.razorpay.config import load_config, load_dotenv
 
 for k, v in load_dotenv().items():
@@ -33,6 +33,14 @@ def call(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         return e.code, {"error": e.read().decode()[:500]}
+    except Exception as e:
+        # A URLError or a timeout must not propagate as an uncaught
+        # exception here: if this happens during CANCEL, the link has
+        # already been created, and a crash with no status code would leave
+        # it open on the account with no clear signal to a human. Status 0
+        # can never satisfy a "< 300" success check, so callers correctly
+        # treat this as a failure rather than silently moving on.
+        return 0, {"error": f"{type(e).__name__}: {e}"}
 
 
 def call_with_retry(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
@@ -64,6 +72,20 @@ print("CREATE ->", status)
 print(json.dumps(created, indent=2)[:2000])
 
 if status < 300 and created.get("id"):
-    cancel_status, cancelled = call_with_retry("POST", f"payment_links/{created['id']}/cancel")
+    link_id = created["id"]
+    cancel_status, cancelled = call_with_retry("POST", f"payment_links/{link_id}/cancel")
     print("\nCANCEL ->", cancel_status)
     print(json.dumps(cancelled, indent=2)[:2000])
+
+    # Defect fix: a non-2xx (or a caught network failure, surfaced above as
+    # status 0) must not be treated as "done". Silently exiting 0 here would
+    # leave a real, uncancelled payment link open on the account with no
+    # failure signal at all.
+    if cancel_status >= 300 or cancelled.get("status") != "cancelled":
+        print(
+            f"\nCANCEL FAILED for {link_id}: Razorpay answered {cancel_status} "
+            f"({cancelled.get('error', cancelled)}). This payment link is LEFT "
+            f"OPEN on the account and needs manual cleanup: {link_id}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
