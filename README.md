@@ -63,34 +63,34 @@ same `FailureEvent`, and nothing downstream may branch on which produced it.
 
 ```mermaid
 flowchart TB
-    subgraph ingest[" 1 · Ingest "]
-        WH[Razorpay webhook<br/>signature verified]
-        SC[Detection scanner<br/>GET-only, on a schedule]
+    subgraph sIngest[" 1 · Ingest "]
+        WH["Razorpay webhook<br/>signature verified"]
+        SC["Detection scanner<br/>GET-only, on a schedule"]
     end
 
     FE[["FailureEvent"]]
 
-    subgraph classify[" 2 · Classify "]
-        TB[Lookup table<br/>28 reasons · free · 84.5%]
-        LLM[Model<br/>only the ambiguous residue<br/>→ 99.4%]
+    subgraph sClassify[" 2 · Classify "]
+        TB["Lookup table<br/>28 reasons · free · 84.5%"]
+        LLM["Model<br/>only the ambiguous residue<br/>84.5% → 99.4%"]
     end
 
-    subgraph plan[" 3 · Plan "]
-        DET[Deterministic planner<br/>the floor]
-        LP[LLM planner<br/>used only if it scores better]
-        BU[Per-cause budgets]
+    subgraph sPlan[" 3 · Plan "]
+        DET["Deterministic planner<br/>the floor it has to clear"]
+        LP["LLM planner<br/>used only if it scores better"]
+        BU["Per-cause attempt budgets"]
     end
 
     GATE{{"4 · Policy gate<br/>six rules, each names itself"}}
     AA[["AuthorizedAction<br/>unforgeable"]]
 
-    subgraph exec[" 5 · Execute "]
-        EX[Executor]
-        SIM[SimulatedRail<br/>measured outcomes]
-        REAL[RazorpayTestRail<br/>charge&lpar;&rpar; raises]
+    subgraph sExecute[" 5 · Execute "]
+        EX["Executor"]
+        SIM["SimulatedRail<br/>measured outcomes"]
+        REAL["RazorpayTestRail<br/>charge raises, never fabricates"]
     end
 
-    LOG[("Append-only audit log<br/>no update · no delete<br/>reconstruct&lpar;id&rpar;")]
+    LOG[("Append-only audit log<br/>no update · no delete<br/>replay any subject")]
 
     WH --> FE
     SC --> FE
@@ -102,14 +102,14 @@ flowchart TB
     LP --> BU
     DET --> BU
     BU --> GATE
-    GATE -- "denied, named" --> LOG
+    GATE -- "denied, and named" --> LOG
     GATE -- "permitted" --> AA
     AA --> EX
     EX --> SIM
     EX --> REAL
     EX --> LOG
-    classify -.-> LOG
-    plan -.-> LOG
+    sClassify -.-> LOG
+    sPlan -.-> LOG
 
     style GATE fill:#2E4A7D,color:#fff
     style AA fill:#2E4A7D,color:#fff
