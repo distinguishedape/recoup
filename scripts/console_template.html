@@ -1,389 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>Recoup Decision Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recoup — Performance Review</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{
-  --paper:#F4F6F4; --surface:#FFFFFF; --sunk:#EAEEEC;
-  --ink:#141A19; --ink-2:#4A5654; --ink-3:#77837F;
-  --line:#DCE3E0; --line-2:#C6D0CC;
-  --rail:#0B6E63; --rail-soft:#E2F0ED;
-  --gold:#8A6516; --good:#2E6B4C; --hold:#8A6516; --halt:#A03A2C;
-  --shadow:0 1px 2px rgba(20,26,25,.05),0 8px 24px -12px rgba(20,26,25,.18);
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --paper:#0D1312; --surface:#141C1B; --sunk:#101817;
-    --ink:#E4EBE8; --ink-2:#9DACA8; --ink-3:#6F7E7A;
-    --line:#233130; --line-2:#2E403E;
-    --rail:#4FC3B4; --rail-soft:#122B28;
-    --gold:#D2A24C; --good:#5FA87E; --hold:#D2A24C; --halt:#D9705E;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  :root {
+    --navy:      #0E2438;
+    --blue:      #1F5FA8;
+    --blue-soft: #E8F0F9;
+    --slate:     #6B7F99;
+    --profit:    #0CA30C;
+    --loss:      #C0392B;
+    --page:      #EDF0F3;
+    --card:      #FFFFFF;
+    --ink:       #12222F;
+    --muted:     #5F7183;
+    --rule:      #D5DDE4;
+    --grid:      #EAEEF2;
   }
-}
-:root[data-theme="dark"]{
-  --paper:#0D1312; --surface:#141C1B; --sunk:#101817;
-  --ink:#E4EBE8; --ink-2:#9DACA8; --ink-3:#6F7E7A;
-  --line:#233130; --line-2:#2E403E;
-  --rail:#4FC3B4; --rail-soft:#122B28;
-  --gold:#D2A24C; --good:#5FA87E; --hold:#D2A24C; --halt:#D9705E;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:var(--paper); color:var(--ink);
-  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
-  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
-}
-.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
-h1,h2,h3{margin:0;text-wrap:balance}
-.serif{font-family:"Instrument Serif",Georgia,serif;font-weight:400;letter-spacing:.01em}
-.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
-.eyebrow{
-  font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--ink-3);
-}
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --navy:      #DCE6F0;
+      --blue:      #5A9BE0;
+      --blue-soft: #16283A;
+      --slate:     #7E93AA;
+      --profit:    #35C24A;
+      --loss:      #E4695C;
+      --page:      #0B1218;
+      --card:      #131E28;
+      --ink:       #E6EDF3;
+      --muted:     #9BAFC0;
+      --rule:      #263643;
+      --grid:      #1C2A35;
+    }
+  }
+  :root[data-theme="dark"] {
+    --navy: #DCE6F0; --blue: #5A9BE0; --blue-soft: #16283A; --slate: #7E93AA;
+    --profit: #35C24A; --loss: #E4695C; --page: #0B1218; --card: #131E28;
+    --ink: #E6EDF3; --muted: #9BAFC0; --rule: #263643; --grid: #1C2A35;
+  }
 
-/* ---------- header ---------- */
-header{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between;
-  padding-bottom:22px;border-bottom:1px solid var(--line)}
-.brand{display:flex;flex-direction:column;gap:6px}
-.brand h1{font-size:40px;line-height:1.05}
-.brand p{margin:0;color:var(--ink-2);max-width:56ch}
-.stamp{font-size:12px;color:var(--ink-3);text-align:right;line-height:1.7}
-.stamp b{color:var(--ink-2);font-weight:500}
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .deck { max-width: 74rem; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
 
-/* ---------- loop ---------- */
-.loop{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:26px 0 34px}
-.loop .node{
-  display:flex;flex-direction:column;gap:1px;padding:9px 14px;border:1px solid var(--line);
-  border-radius:3px;background:var(--surface);min-width:112px;
-}
-.loop .node b{font-size:12.5px;font-weight:600}
-.loop .node span{font-size:11px;color:var(--ink-3)}
-.loop .node.gate{border-color:var(--rail);background:var(--rail-soft)}
-.loop .arw{color:var(--ink-3);font-size:13px}
+  /* ---- slide chrome ---- */
+  .slide {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 2rem 2.25rem 2.25rem; margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--blue);
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid var(--navy); padding-bottom: 0.6rem; margin-bottom: 1.4rem;
+  }
+  .eyebrow .n { color: var(--muted); }
+  h1 { font-size: 2.4rem; line-height: 1.1; margin: 0 0 0.4rem; letter-spacing: -0.02em; color: var(--navy); }
+  h2 { font-size: 1.45rem; line-height: 1.2; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
+  h3 { font-size: 0.95rem; margin: 1.6rem 0 0.7rem; text-transform: uppercase;
+       letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+  p { margin: 0 0 0.9rem; max-width: 68ch; }
+  p:last-child { margin-bottom: 0; }
+  .lede { font-size: 1.05rem; color: var(--muted); max-width: 62ch; }
 
-/* ---------- tiles ---------- */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:1px;
-  background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
-.tile{background:var(--surface);padding:18px 18px 16px;display:flex;flex-direction:column;gap:3px}
-.tile .k{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
-.tile .v{font-size:30px;line-height:1.15;font-variant-numeric:tabular-nums}
-.tile .base{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.tile .d{font-size:12.5px;font-weight:600;color:var(--good)}
-.tile .d.neg{color:var(--halt)}
+  /* ---- KPI tiles ---- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem,1fr)); gap: 1px;
+          background: var(--rule); border: 1px solid var(--rule); }
+  .kpi { background: var(--card); padding: 1rem 1.1rem 1.15rem; }
+  .kpi .k { font-family: "IBM Plex Mono", monospace; font-size: 0.66rem; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--muted); }
+  .kpi .v { font-size: 1.95rem; font-weight: 600; line-height: 1.15; margin-top: 0.35rem;
+            font-variant-numeric: tabular-nums; color: var(--navy); }
+  .kpi .d { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; margin-top: 0.25rem;
+            font-variant-numeric: tabular-nums; font-weight: 500; }
+  .kpi .base { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--muted);
+               font-variant-numeric: tabular-nums; }
+  .up { color: var(--profit); } .down { color: var(--loss); }
 
-/* ---------- section ---------- */
-section{margin-top:52px}
-.shead{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
-.shead h2{font-size:27px;line-height:1.15}
-.shead p{margin:0;color:var(--ink-2);max-width:70ch}
+  /* ---- bars ---- */
+  .barrow { display: grid; grid-template-columns: 11rem 1fr 7.5rem; gap: 0.85rem;
+            align-items: center; margin-bottom: 0.5rem; }
+  .barlabel { font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; color: var(--ink); }
+  .bartrack { position: relative; height: 20px; background: var(--grid); border-radius: 2px; }
+  .barfill { position: absolute; top: 0; bottom: 0; border-radius: 2px 4px 4px 2px; }
+  .barfill.ctl { background: var(--slate); }
+  .barfill.trt { background: var(--blue); }
+  .barval { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; text-align: right;
+            font-variant-numeric: tabular-nums; }
+  .pair { margin-bottom: 1.1rem; }
+  .pair .bartrack + .bartrack { margin-top: 2px; }
 
-/* ---------- case picker ---------- */
-.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:8px;margin-bottom:20px}
-.case{
-  text-align:left;font:inherit;cursor:pointer;padding:11px 13px;border-radius:3px;
-  border:1px solid var(--line);background:var(--surface);color:var(--ink);
-  display:flex;flex-direction:column;gap:3px;transition:border-color .13s,background .13s;
-}
-.case:hover{border-color:var(--line-2)}
-.case:focus-visible{outline:2px solid var(--rail);outline-offset:2px}
-.case[aria-pressed="true"]{border-color:var(--rail);background:var(--rail-soft)}
-.case b{font-size:13.5px;font-weight:600}
-.case span{font-size:11px;color:var(--ink-3)}
-.case[aria-pressed="true"] span{color:var(--ink-2)}
+  /* ---- P&L table ---- */
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+  th, td { padding: 0.5rem 0.85rem 0.5rem 0; text-align: right; border-bottom: 1px solid var(--rule); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { font-family: "IBM Plex Mono", monospace; font-size: 0.66rem; font-weight: 500;
+             letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+             border-bottom: 2px solid var(--navy); }
+  td.cause { font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; }
+  td.delta { font-weight: 600; white-space: nowrap; }
+  .scroll { overflow-x: auto; }
 
-.blurb{margin:0 0 18px;color:var(--ink-2);max-width:72ch}
+  /* ---- replication grid ---- */
+  .gridwrap { display: grid; grid-template-columns: 5.5rem repeat(4, 1fr); gap: 3px; max-width: 46rem; }
+  .gcell { padding: 0.6rem 0.5rem; border-radius: 3px; text-align: center;
+           font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; font-weight: 500;
+           font-variant-numeric: tabular-nums; }
+  .ghead { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+           padding-top: 0.75rem; }
+  .gcell .tick { display: block; font-size: 0.66rem; font-weight: 400; opacity: 0.85; margin-top: 0.1rem; }
 
-/* ---------- trace ---------- */
-.columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:860px){.columns{grid-template-columns:1fr}}
-.col{border:1px solid var(--line);border-radius:4px;background:var(--surface);
-  display:flex;flex-direction:column;overflow:hidden}
-.col > h3{
-  display:flex;align-items:baseline;gap:9px;padding:12px 15px;border-bottom:1px solid var(--line);
-  background:var(--sunk);font-size:13.5px;font-weight:600;
-}
-.col > h3 em{font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);margin-left:auto}
-.col.agent > h3{color:var(--rail)}
-.steps{display:flex;flex-direction:column;padding:4px 0}
-.step{display:grid;grid-template-columns:52px 1fr;gap:11px;padding:9px 15px;
-  border-bottom:1px solid var(--line);align-items:start}
-.step:last-child{border-bottom:none}
-.step .clk{font-size:11px;color:var(--ink-3);padding-top:3px;font-variant-numeric:tabular-nums;
-  font-family:"IBM Plex Mono",monospace}
-.step .body{display:flex;flex-direction:column;gap:3px;min-width:0}
-.tagrow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.tag{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-  padding:2px 6px;border-radius:2px;background:var(--sunk);color:var(--ink-3);
-  border:1px solid var(--line)}
-.tag.rail{color:var(--rail);border-color:var(--rail);background:var(--rail-soft)}
-.tag.hold{color:var(--hold);border-color:var(--hold);background:transparent}
-.tag.good{color:var(--good);border-color:var(--good);background:transparent}
-.tag.halt{color:var(--halt);border-color:var(--halt);background:transparent}
-.step .t{font-size:13.5px;font-weight:600;line-height:1.4}
-.step .d{font-size:12.5px;color:var(--ink-2);line-height:1.5}
-.step .d code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;
-  background:var(--sunk);padding:1px 4px;border-radius:2px}
-.acts{display:flex;flex-direction:column;gap:4px;margin-top:3px}
-.act{display:grid;grid-template-columns:auto 1fr;gap:8px;font-size:12px;color:var(--ink-2);
-  border-left:2px solid var(--line-2);padding-left:9px}
-.act b{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;color:var(--ink-3);white-space:nowrap}
-.sup{border-left:2px solid var(--halt);padding:5px 9px;margin-top:4px;font-size:12px;color:var(--ink-2)}
-.sup b{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--halt);font-weight:600}
-.sup q{font-style:italic}
+  /* ---- Act 1 stepper ---- */
+  .caseline { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.3rem; }
+  .casebtn { font-family: "IBM Plex Sans", sans-serif; font-size: 0.82rem; padding: 0.4rem 0.75rem;
+             border: 1px solid var(--rule); background: var(--card); color: var(--muted);
+             border-radius: 3px; cursor: pointer; }
+  .casebtn[aria-selected="true"] { background: var(--navy); border-color: var(--navy);
+                                   color: var(--card); font-weight: 600; }
+  .casebtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* ---------- causes ---------- */
-.bars{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);
-  border-radius:4px;background:var(--surface);padding:16px 18px}
-.bar{display:grid;grid-template-columns:170px 1fr 108px;gap:14px;align-items:center;padding:6px 0}
-.bar .nm{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
-.track{position:relative;height:19px;background:linear-gradient(var(--sunk),var(--sunk)) no-repeat center/100% 1px}
-.track i{position:absolute;top:2px;bottom:2px;border-radius:1px;display:block}
-.track i.pos{background:var(--rail)}
-.track i.neg{background:var(--halt);opacity:.62}
-.track u{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--line-2)}
-.bar .amt{text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums;font-weight:600}
-.bar .amt.pos{color:var(--rail)} .bar .amt.neg{color:var(--halt)}
-.legend{font-size:12px;color:var(--ink-3);margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem; }
+  .lane h4 { margin: 0 0 0.6rem; font-size: 0.78rem; font-family: "IBM Plex Mono", monospace;
+             letter-spacing: 0.1em; text-transform: uppercase; }
+  .lane.rec h4 { color: var(--blue); }
+  .lane.base h4 { color: var(--slate); }
+  .steps { list-style: none; margin: 0; padding: 0; min-height: 16rem; }
+  .step { display: grid; grid-template-columns: 4.6rem 1fr; gap: 0.7rem; padding: 0.45rem 0.6rem;
+          border-left: 3px solid transparent; font-size: 0.86rem; opacity: 0.18;
+          transition: opacity 0.18s ease, background 0.18s ease; }
+  .step.on { opacity: 1; background: var(--blue-soft); border-left-color: var(--blue); }
+  .step.past { opacity: 0.62; }
+  .step.blocked.on { border-left-color: var(--loss); background: color-mix(in srgb, var(--loss) 9%, transparent); }
+  .step .when { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--muted); }
+  .step .what { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; }
+  .step .why { color: var(--muted); font-size: 0.8rem; }
+  .step.blocked .what { color: var(--loss); }
+  .step.win .what { color: var(--profit); font-weight: 600; }
 
-/* ---------- deploy ---------- */
-.deploy{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:1px;
-  background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
-.dstep{background:var(--surface);padding:17px 18px;display:flex;flex-direction:column;gap:6px}
-.dstep .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--rail);font-weight:600}
-.dstep h4{margin:0;font-size:14px;font-weight:600}
-.dstep p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.55}
-.dstep code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:var(--sunk);
-  padding:1px 4px;border-radius:2px;word-break:break-word}
-footer{margin-top:46px;padding-top:18px;border-top:1px solid var(--line);
-  font-size:12px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:6px 18px}
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  .controls { display: flex; align-items: center; gap: 0.7rem; margin-top: 1.2rem;
+              border-top: 1px solid var(--rule); padding-top: 1rem; }
+  .controls button { font-family: "IBM Plex Sans", sans-serif; font-size: 0.85rem; font-weight: 600;
+                     padding: 0.5rem 1.1rem; border-radius: 3px; border: 1px solid var(--navy);
+                     background: var(--navy); color: var(--card); cursor: pointer; }
+  .controls button.ghost { background: transparent; color: var(--navy); }
+  .controls button:disabled { opacity: 0.35; cursor: default; }
+  .controls button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .counter { font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; color: var(--muted);
+             margin-left: auto; }
+  kbd { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; border: 1px solid var(--rule);
+        border-bottom-width: 2px; border-radius: 3px; padding: 0.05rem 0.35rem; color: var(--muted); }
+
+  .note { font-size: 0.88rem; color: var(--muted); border-left: 3px solid var(--rule);
+          padding-left: 0.9rem; margin-top: 1.2rem; }
+  .note strong { color: var(--ink); }
+  footer { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--muted);
+           text-align: center; line-height: 1.9; padding-top: 1rem; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.86em; }
+
+  @media (max-width: 60rem) { .stage { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { .step { transition: none; } }
 </style>
+</head>
+<body>
+<div class="deck">
 
-<div class="wrap">
-<header>
-  <div class="brand">
-    <span class="eyebrow">Razorpay AI Buildathon &middot; Track 03</span>
-    <h1 class="serif">Recoup Decision Console</h1>
-    <p>An agent that reads <em>why</em> a subscription charge failed, picks the intervention
-       that matches that cause, and executes inside limits it cannot talk its way past.</p>
+  <div class="slide">
+    <div class="eyebrow"><span>Revenue Recovery · Performance Review</span><span class="n" id="meta"></span></div>
+    <h1>Recoup</h1>
+    <p class="lede">An agent for failed subscription auto-debits, measured against the retry ladder it replaces. Three sections: one customer in detail, then the full cohort, then whether the result holds up.</p>
   </div>
-  <div class="stamp mono" id="stamp"></div>
-</header>
 
-<div class="loop" id="loop"></div>
-
-<div class="tiles" id="tiles"></div>
-
-<section>
-  <div class="shead">
-    <span class="eyebrow">The part a metrics table cannot show</span>
-    <h2 class="serif">Watch it decide</h2>
-    <p>Six real subjects from the same run. On the left is what Recoup did and why; on the
-       right is what the baseline retry ladder did to the <em>same</em> subject, from the
-       same failure. Every line is read back out of the audit log.</p>
+  <!-- ACT 1 -->
+  <div class="slide">
+    <div class="eyebrow"><span>Section 1 · What it does</span><span class="n">One customer, step by step</span></div>
+    <h2 id="caseTitle"></h2>
+    <p class="lede" id="caseBlurb"></p>
+    <div class="caseline" id="cases" role="tablist"></div>
+    <div class="stage">
+      <div class="lane rec"><h4>Recoup</h4><ul class="steps" id="recSteps"></ul></div>
+      <div class="lane base"><h4>Baseline ladder — same customer</h4><ul class="steps" id="baseSteps"></ul></div>
+    </div>
+    <div class="controls">
+      <button class="ghost" id="prev">‹ Back</button>
+      <button id="next">Next step ›</button>
+      <button class="ghost" id="all">Show all</button>
+      <span class="counter"><span id="counter"></span> &nbsp; <kbd>←</kbd> <kbd>→</kbd></span>
+    </div>
+    <p class="note">Every line is a record read back out of the append-only audit log after the run. Nothing here is re-enacted for the demo.</p>
   </div>
-  <div class="cases" id="cases"></div>
-  <p class="blurb" id="blurb"></p>
-  <div class="columns" id="cols"></div>
-</section>
 
-<section>
-  <div class="shead">
-    <span class="eyebrow">Where the money comes from</span>
-    <h2 class="serif">It does not win everywhere</h2>
-    <p>Gross recovered per cause, against the baseline. Two causes go backwards, and a
-       headline total would have hidden that.</p>
+  <!-- ACT 2 -->
+  <div class="slide">
+    <div class="eyebrow"><span>Section 2 · What it earned</span><span class="n">2,000 failed charges · mid band</span></div>
+    <h2>Cohort performance against the baseline</h2>
+    <div class="kpis" id="kpis"></div>
+    <h3>Recovered by cause — where the gains and the losses are</h3>
+    <div class="scroll"><table id="causeTable">
+      <thead><tr><th>Cause</th><th>Baseline</th><th>Recoup</th><th>Change</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <h3>Which mechanism collected the money</h3>
+    <div id="mechBars"></div>
+    <p class="note"><strong>The pay-now link is credited more than it added.</strong> Credit goes to whichever mechanism collected the payment, so a customer it converts on day two is credited to it even when the day-four retry would have collected the same rupees. Against the identical run without it, the two eligible causes gained <strong>₹1,87,405</strong>, not ₹3,25,341.</p>
   </div>
-  <div class="bars" id="bars"></div>
-</section>
 
-<section>
-  <div class="shead">
-    <span class="eyebrow">Running it against your own account</span>
-    <h2 class="serif">How this drops into a live stack</h2>
-    <p>The engine below the ingest layer knows nothing about Razorpay. Four things change
-       when it moves from this harness to a real merchant.</p>
+  <!-- ACT 3 -->
+  <div class="slide">
+    <div class="eyebrow"><span>Section 3 · Whether it holds</span><span class="n">3 bands × 4 cohorts</span></div>
+    <h2>Net recovery lift in every cell</h2>
+    <p class="lede">Recovery probabilities are assumptions, so every one is swept across a pessimistic, central and optimistic band, over four independent cohorts. A finding counts only if it holds in <em>every</em> cell — not on average.</p>
+    <div class="gridwrap" id="grid"></div>
+    <p class="note">Target is <strong>+15%</strong> net recovery. Every cell clears it; the weakest is the one to judge the result by, not the strongest.</p>
   </div>
-  <div class="deploy">
-    <div class="dstep"><span class="n">01</span><h4>Point a webhook at it</h4>
-      <p>Serve <code>recoup.ingest.webhook_app</code>, register the URL against
-         <code>subscription.pending</code> and <code>payment.failed</code>, and set
-         <code>RAZORPAY_WEBHOOK_SECRET</code>. Signatures are verified against the raw
-         bytes before the body is parsed.</p></div>
-    <div class="dstep"><span class="n">02</span><h4>Hand it a sink</h4>
-      <p><code>create_app(config, audit, sink=...)</code>. The sink is what runs classify,
-         plan, gate and execute on each event. Without it the receiver only writes to the
-         audit log &mdash; which is exactly what the demo build does today.</p></div>
-    <div class="dstep"><span class="n">03</span><h4>Swap the rail</h4>
-      <p>Recovery outcomes come from <code>SimulatedRail</code>. Replace it with your own
-         charge and messaging transport. <code>RazorpayTestRail.charge()</code> deliberately
-         raises rather than return a plausible number, so nothing simulated can enter
-         through a path labelled real.</p></div>
-    <div class="dstep"><span class="n">04</span><h4>Set your own limits</h4>
-      <p>Contact window, minimum gap, per-cause budgets and the template allowlist are
-         constants in <code>recoup/policy/rules.py</code> and
-         <code>recoup/plan/budgets.py</code>. Nothing downstream can bypass them: an
-         action is only executable as an <code>AuthorizedAction</code>, and that type can
-         only be constructed inside the policy engine.</p></div>
-  </div>
-</section>
 
-<footer id="foot"></footer>
+  <footer id="foot"></footer>
 </div>
 
 <script>
 const DATA = /*__DATA__*/null;
+const R = (p) => "₹" + Math.round(p / 100).toLocaleString("en-IN");
+const PCT = (x) => (x * 100).toFixed(1) + "%";
 
-const rupees = p => {
-  const n = Math.round(p/100), s = String(Math.abs(n));
-  let out;
-  if (s.length <= 3) out = s;
-  else { const last = s.slice(-3); let rest = s.slice(0,-3), parts = [];
-    while (rest.length > 2) { parts.unshift(rest.slice(-2)); rest = rest.slice(0,-2); }
-    if (rest) parts.unshift(rest);
-    out = parts.join(",") + "," + last; }
-  return (n<0?"-":"") + "₹" + out;
-};
-const pct = x => (x*100).toFixed(1) + "%";
-const clock = iso => { const d = new Date(iso);
-  return String(d.getUTCDate()).padStart(2,"0") + " " +
-         String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0"); };
-const ist = iso => { const d = new Date(new Date(iso).getTime() + 5.5*3600*1000);
-  return String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " IST"; };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-
-/* ---------- header + loop ---------- */
+/* ---------- meta ---------- */
 const m = DATA.meta;
-document.getElementById("stamp").innerHTML =
-  `<b>${m.cohort.toLocaleString("en-IN")}</b> failed charges &middot; seed <b>${m.seed}</b><br>` +
-  `${m.band} band &middot; paired draws per subject<br>generated ${m.generated}`;
+document.getElementById("meta").textContent =
+  `seed ${m.seed} · ${m.cohort.toLocaleString("en-IN")} subjects · ${m.generated}`;
+document.getElementById("foot").innerHTML =
+  `Generated from the committed evidence bundle — sweep.json, replication.json and the audit log.<br>` +
+  `No figure on this page was typed by hand.`;
 
-document.getElementById("loop").innerHTML = [
-  ["Signal","failed charge arrives"],["Classify","why did it fail"],
-  ["Plan","what answers that cause"],["Policy gate","may we do it",true],
-  ["Act","on the rail"],["Record","append-only"]
-].map(([b,s,gate],i) =>
-  (i?'<span class="arw">&rarr;</span>':"") +
-  `<div class="node${gate?" gate":""}"><b>${b}</b><span>${s}</span></div>`
-).join("");
+/* ---------- ACT 1 : the stepper ---------- */
+const STAGE_TEXT = {
+  ingest: ["failure received", ""],
+  classify: ["cause identified", ""],
+  plan: ["intervention planned", ""],
+  execute: ["executed", ""],
+  // The baseline arm emits every retry as `control_execute`
+  // (recoup/experiment/control.py). Without this entry the paired slide showed
+  // a clean label on the Recoup side and a raw enum on the baseline side --
+  // an asymmetry that undercuts the very fairness the paired view exists to show.
+  control_execute: ["executed", ""],
+  execute_unsupported: ["refused by the rail", ""],
+  policy_block: ["DENIED by policy", ""],
+  ladder_block: ["withheld by the ladder", ""],
+  contact_rescheduled: ["RESCHEDULED to stay compliant", ""],
+  pay_now_link_created: ["payment link created", ""],
+  terminal: ["outcome", ""],
+};
+const BLOCKED = new Set(["policy_block", "contact_rescheduled", "ladder_block", "execute_unsupported"]);
 
-/* ---------- tiles ---------- */
-const T = DATA.totals.treatment, C = DATA.totals.control;
-const tile = (k,v,base,d,neg) =>
-  `<div class="tile"><span class="k">${k}</span><span class="v serif">${v}</span>
-   <span class="base">baseline ${base}</span><span class="d${neg?" neg":""}">${d}</span></div>`;
-const g = (T.gross-C.gross)/C.gross, netT = T.gross-T.cost, netC = C.gross-C.cost;
-document.getElementById("tiles").innerHTML =
-  tile("Gross recovered", rupees(T.gross), rupees(C.gross), "+"+pct(g)) +
-  tile("Net of cost", rupees(netT), rupees(netC), "+"+pct((netT-netC)/netC)) +
-  tile("Recovery rate", pct(T.recovered/T.denominator), pct(C.recovered/C.denominator),
-       "+"+((T.recovered/T.denominator - C.recovered/C.denominator)*100).toFixed(1)+"pp") +
-  tile("Charges per recovery", T.per_recovery.toFixed(2), C.per_recovery.toFixed(2),
-       pct((T.per_recovery-C.per_recovery)/C.per_recovery)) +
-  tile("Wasted attempts", T.wasted.toLocaleString("en-IN"), C.wasted.toLocaleString("en-IN"),
-       "−"+pct((C.wasted-T.wasted)/C.wasted)+" eliminated");
+// Restored after a rewrite dropped it. `why` can carry raw model text --
+// rationale straight out of the classifier, whose own prompt shows the model an
+// example containing angle brackets -- and it lands in innerHTML.
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-/* ---------- trace rendering ---------- */
-const CLS = {INSUFFICIENT_FUNDS:"a shortfall",INSTRUMENT_INVALID:"a dead instrument",
-  MANDATE_REVOKED:"consent withdrawn",TRANSIENT_ISSUER:"an issuer problem",
-  RISK_DECLINE:"a risk block",UNCLASSIFIED:"cause unknown"};
-const TYPE = {retry_charge:"Retry the charge",request_instrument_update:"Ask for a new instrument",
-  send_message:"Send a message",stop:"Stop",escalate_manual_review:"Escalate to a human"};
-
-function describe(stage, p) {
-  switch (stage) {
-    case "ingest": return {tag:"Signal", tone:"", t:"A charge failed",
-      d:`Razorpay reason <code>${esc(p.error_reason)}</code> &middot; source
-         <code>${esc(p.error_source)}</code> &middot; step <code>${esc(p.error_step)}</code>`};
-    case "classify": return {tag:"Classify", tone:"rail",
-      t:`${p.failure_class} &mdash; ${CLS[p.failure_class]||""}`,
-      d:`<b>${p.method === "table" ? "Lookup table" : p.method === "llm" ? "Model" : "Fallback"}</b>,
-         confidence ${p.confidence.toFixed(2)}. ${esc(p.rationale)}`};
-    case "plan": {
-      const acts = (p.actions||[]).map(a =>
-        `<div class="act"><b>T${a.tier} &middot; ${a.scheduled_at ? clock(a.scheduled_at) : "now"}</b>
-          <span>${TYPE[a.type]||a.type}${a.template_id?` &middot; <code>${esc(a.template_id)}</code>`:""}
-          <br>${esc(a.reason||"")}</span></div>` +
-        (a.suppressed_free_text ? `<div class="sup"><b>Copy withheld by policy</b>
-           <q>${esc(a.suppressed_free_text)}</q></div>` : "")).join("");
-      const n = (p.actions||[]).length;
-      return {tag:"Plan", tone:"rail",
-              t:`${n} action${n===1?"":"s"}, matched to the cause`,
-              d:`<div class="acts">${acts}</div>`};
-    }
-    case "contact_rescheduled": return {tag:"Policy", tone:"hold", t:"Blocked &mdash; and moved, not dropped",
-      d:`<code>${esc(p.rule)}</code>: ${esc(p.detail)}.<br>
-         Rescheduled to <b>${ist(p.rescheduled_to)}</b>, attempt ${p.attempt}.`};
-    case "policy_block": return {tag:"Policy", tone:"hold", t:`Refused by <code>${esc(p.rule)}</code>`,
-      d:esc(p.detail||"")};
-    case "ladder_block": return {tag:"Ladder", tone:"", t:"Held at the ladder",
-      d:`<code>${esc(p.rule)}</code>: ${esc(p.detail||"")}`};
-    case "execute": case "control_execute": {
-      const ok = p.succeeded;
-      return {tag:"Act", tone: ok?"good":"", t:(TYPE[p.action_type]||p.action_type) + (ok?"":" — declined"),
-        d:`${esc(p.detail||"")} &middot; cost ${rupees(p.cost_paise||0)}`};
-    }
-    case "terminal": {
-      const good = p.terminal === "recovered";
-      return {tag:"Outcome", tone: good?"good":(p.terminal==="unrecovered"?"halt":"hold"),
-        t: good ? `Recovered ${rupees(p.gross_recovered_paise)}`
-                : p.terminal.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()),
-        d:`Spent ${rupees(p.cost_paise)} getting there.`};
-    }
-    default: return {tag:stage, tone:"", t:stage, d:""};
+function line(rec) {
+  const p = rec.payload || {};
+  const label = (STAGE_TEXT[rec.stage] || [rec.stage])[0];
+  // The terminal record carries BOTH `terminal` and `failure_class`, so a plain
+  // OR chain short-circuits on the cause and every case ends by repeating a value
+  // the viewer already saw at classify -- "outcome · RISK_DECLINE" where the whole
+  // point of that subject is "outcome · manual_review".
+  const detail = rec.stage === "terminal"
+    ? (p.terminal || "")
+    : (p.failure_class || p.action_type || p.terminal || "");
+  const rule = p.rule || p.verdict_rule || "";
+  let why = p.detail || p.action_reason || p.rationale || "";
+  if (rec.stage === "terminal" && p.gross_recovered_paise !== undefined) {
+    why = `recovered ${R(p.gross_recovered_paise)} · spent ${R(p.cost_paise || 0)}`;
   }
+  const win = (rec.stage === "execute" || rec.stage === "control_execute")
+    && (p.succeeded === true);
+  const t = new Date(rec.t);
+  // Pinned to UTC, which is how the audit log stores virtual_time and how the
+  // "generated" stamp is rendered. Left to the viewer's zone, the same committed
+  // file shows different clock times -- and near midnight, different dates --
+  // depending on where it is opened.
+  const OPTS = { timeZone: "UTC" };
+  const when = t.toLocaleDateString("en-GB", { day: "2-digit", month: "short", ...OPTS }) + " " +
+               t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", ...OPTS }) + "Z";
+  return { when, label, detail, rule, why, blocked: BLOCKED.has(rec.stage), win };
 }
 
-function renderCol(title, note, trace, isAgent) {
-  const steps = trace.map(r => {
-    const x = describe(r.stage, r.payload);
-    return `<div class="step"><span class="clk">${clock(r.t)}</span><div class="body">
-      <div class="tagrow"><span class="tag ${x.tone}">${x.tag}</span></div>
-      <div class="t">${x.t}</div>${x.d?`<div class="d">${x.d}</div>`:""}</div></div>`;
+function render(list, records) {
+  list.innerHTML = records.map((rec, i) => {
+    const L = line(rec);
+    const cls = ["step", L.blocked ? "blocked" : "", L.win ? "win" : ""].join(" ");
+    const rule = L.rule ? ` <span class="why">[rule: ${esc(L.rule)}]</span>` : "";
+    return `<li class="${cls}" data-i="${i}">
+      <span class="when">${esc(L.when)}</span>
+      <span><span class="what">${esc(L.label)}${L.detail ? " · " + esc(L.detail) : ""}</span>${rule}
+      ${L.why ? `<br><span class="why">${esc(L.why)}</span>` : ""}</span></li>`;
   }).join("");
-  return `<div class="col${isAgent?" agent":""}"><h3>${title}<em>${note}</em></h3>
-          <div class="steps">${steps}</div></div>`;
+}
+
+let caseKey = Object.keys(DATA.cases)[0];
+let step = 0;
+
+function current() { return DATA.cases[caseKey]; }
+function maxSteps() {
+  return Math.max(current().treatment.trace.length, current().control.trace.length);
+}
+
+function paint() {
+  const total = maxSteps();
+  document.querySelectorAll("#recSteps .step, #baseSteps .step").forEach((el) => {
+    const i = +el.dataset.i;
+    el.classList.toggle("on", i === step);
+    el.classList.toggle("past", i < step);
+  });
+  document.getElementById("counter").textContent = `step ${Math.min(step + 1, total)} of ${total}`;
+  document.getElementById("prev").disabled = step === 0;
+  document.getElementById("next").disabled = step >= total - 1;
+  const on = document.querySelector("#recSteps .step.on");
+  if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });
 }
 
 function show(key) {
-  const c = DATA.cases[key];
-  document.querySelectorAll(".case").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.k === key)));
-  document.getElementById("blurb").textContent = c.blurb;
-  const to = c.treatment.outcome, co = c.control.outcome;
-  const note = o => `${o.charge_attempts} charge${o.charge_attempts===1?"":"s"} &middot; ${rupees(o.gross_recovered_paise)}`;
-  document.getElementById("cols").innerHTML =
-    renderCol("Recoup", note(to), c.treatment.trace, true) +
-    renderCol("Baseline retry ladder", note(co), c.control.trace, false);
+  caseKey = key; step = 0;
+  const c = current();
+  document.getElementById("caseTitle").textContent = c.title;
+  document.getElementById("caseBlurb").textContent = c.blurb;
+  render(document.getElementById("recSteps"), c.treatment.trace);
+  render(document.getElementById("baseSteps"), c.control.trace);
+  document.querySelectorAll(".casebtn").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.k === key)));
+  paint();
 }
 
-document.getElementById("cases").innerHTML = Object.entries(DATA.cases).map(([k,c]) =>
-  `<button class="case" data-k="${k}" aria-pressed="false" type="button">
-     <b>${c.title}</b><span class="mono">${c.id}</span></button>`).join("");
-document.querySelectorAll(".case").forEach(b => b.addEventListener("click", () => show(b.dataset.k)));
-show(Object.keys(DATA.cases)[0]);
+document.getElementById("cases").innerHTML = Object.entries(DATA.cases).map(([k, c]) =>
+  `<button class="casebtn" role="tab" data-k="${k}" aria-selected="false">${c.title}</button>`).join("");
+document.querySelectorAll(".casebtn").forEach((b) =>
+  b.addEventListener("click", () => show(b.dataset.k)));
 
-/* ---------- cause bars ---------- */
-const cls = [...new Set([...Object.keys(T.by_class), ...Object.keys(C.by_class)])];
-const deltas = cls.map(k => [k, (T.by_class[k]||0) - (C.by_class[k]||0)])
-                  .sort((a,b) => b[1]-a[1]);
-const span = Math.max(...deltas.map(d => Math.abs(d[1]))) || 1;
-document.getElementById("bars").innerHTML = deltas.map(([k,d]) => {
-  const w = Math.abs(d)/span*50, pos = d >= 0;
-  return `<div class="bar"><span class="nm">${k}</span>
-    <span class="track"><u style="left:50%"></u>
-      <i class="${pos?"pos":"neg"}" style="${pos?`left:50%;width:${w}%`:`right:50%;width:${w}%`}"></i>
-    </span>
-    <span class="amt ${pos?"pos":"neg"}">${pos?"+":""}${rupees(d)}</span></div>`;
-}).join("") + `<p class="legend">Recoup wins decisively where knowing the cause changes the
-  action, and loses on the two causes an ordinary ladder already handles well. The net is
-  strongly positive; it is not a clean sweep.</p>`;
+document.getElementById("next").onclick = () => { step = Math.min(step + 1, maxSteps() - 1); paint(); };
+document.getElementById("prev").onclick = () => { step = Math.max(step - 1, 0); paint(); };
+document.getElementById("all").onclick = () => { step = maxSteps() - 1; paint(); };
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") { document.getElementById("next").click(); e.preventDefault(); }
+  if (e.key === "ArrowLeft") { document.getElementById("prev").click(); e.preventDefault(); }
+});
 
-document.getElementById("foot").innerHTML =
-  `<span>Every figure recomputed from the audit log, not from instrumentation inside the pipeline.</span>
-   <span>Recovery outcomes are simulated; classification, policy and the audit trail are real code.</span>`;
+/* ---------- ACT 2 : the cohort ---------- */
+const X = DATA.experiment, mid = X.bands.mid, C = mid.control, T = mid.treatment;
+
+// `delta` is the raw signed number; the arrow comes from its sign and the colour
+// from whether that direction is desirable. Passing a pre-signed string and a
+// separate "good" flag produced "▲ −₹5,107" -- an up-arrow beside a minus.
+// This matches how the cause table below already does it.
+function kpi(k, value, baseline, delta, good, fmt) {
+  const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "—";
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+  const dir = delta === 0 ? "" : (good ? "up" : "down");
+  return `<div class="kpi"><div class="k">${k}</div><div class="v">${value}</div>
+    <div class="d ${dir}">${arrow} ${sign}${fmt(Math.abs(delta))}</div>
+    <div class="base">baseline ${baseline}</div></div>`;
+}
+const NUM = (n) => n.toLocaleString("en-IN");
+const PP = (n) => (n * 100).toFixed(1) + "pp";
+document.getElementById("kpis").innerHTML = [
+  kpi("Net recovered", R(T.net), R(C.net), T.net - C.net, true, R),
+  // Down is the good direction for these two, so the arrow points down and the
+  // colour still reads as a gain.
+  kpi("Cost of chasing", R(T.cost), R(C.cost), T.cost - C.cost, true, R),
+  kpi("Recovery rate", PCT(T.rate), PCT(C.rate), T.rate - C.rate, true, PP),
+  kpi("Customers recovered", NUM(T.recovered), NUM(C.recovered),
+      T.recovered - C.recovered, true, NUM),
+  kpi("Wasted attempts", NUM(T.wasted), NUM(C.wasted), T.wasted - C.wasted, true, NUM),
+  kpi("Net per failed charge", R(T.per_subject_net), R(C.per_subject_net),
+      T.per_subject_net - C.per_subject_net, true, R),
+].join("");
+
+const tbody = document.querySelector("#causeTable tbody");
+tbody.innerHTML = X.by_class.map((r) => {
+  const cls = r.delta > 0 ? "up" : r.delta < 0 ? "down" : "";
+  const arrow = r.delta > 0 ? "▲" : r.delta < 0 ? "▼" : "—";
+  const amount = r.delta === 0 ? "₹0" : r.sign + R(Math.abs(r.delta));
+  return `<tr><td class="cause">${r.cause}</td><td>${R(r.control)}</td><td>${R(r.treatment)}</td>
+    <td class="delta ${cls}">${arrow} ${amount}</td></tr>`;
+}).join("");
+
+const mechMax = Math.max(...X.by_mechanism.map((x) => Math.max(x.control, x.treatment)));
+document.getElementById("mechBars").innerHTML = X.by_mechanism.map((x) => `
+  <div class="pair">
+    <div class="barrow">
+      <span class="barlabel">${x.mechanism}</span>
+      <div>
+        <div class="bartrack"><div class="barfill trt" style="width:${(x.treatment / mechMax) * 100}%"></div></div>
+        <div class="bartrack"><div class="barfill ctl" style="width:${(x.control / mechMax) * 100}%"></div></div>
+      </div>
+      <span class="barval">${R(x.treatment)}<br><span style="color:var(--muted)">${R(x.control)}</span></span>
+    </div>
+  </div>`).join("") +
+  `<p class="note" style="margin-top:0.4rem">Upper bar <span style="color:var(--blue);font-weight:600">Recoup</span> · lower bar <span style="color:var(--slate);font-weight:600">baseline</span>. The baseline has no payment link and never will, so its money is entirely retry.</p>`;
+
+/* ---------- ACT 3 : the grid ---------- */
+const bands = ["low", "mid", "high"];
+const BAND_LABEL = { low: "Pessimistic", mid: "Central", high: "Optimistic" };
+const lifts = X.grid.map((c) => c.lift);
+const lo = Math.min(...lifts), hi = Math.max(...lifts);
+const RAMP = ["#CDE2FB", "#9EC5F4", "#6DA7EC", "#3987E5", "#1C5CAB"];
+function rampColor(v) {
+  const t = hi === lo ? 1 : (v - lo) / (hi - lo);
+  return RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+}
+let html = `<div class="gcell ghead"></div>` +
+  X.seeds.map((s) => `<div class="gcell ghead">Cohort ${s}</div>`).join("");
+for (const band of bands) {
+  html += `<div class="gcell ghead" style="text-align:left">${BAND_LABEL[band]}</div>`;
+  for (const seed of X.seeds) {
+    const cell = X.grid.find((c) => c.band === band && c.seed === seed);
+    const dark = (cell.lift - lo) / (hi - lo || 1) > 0.55;
+    // Sign derived, not hardcoded: a below-target cell is a supported shape of
+    // this data -- that is what `clears` is for -- and "+-5.0%" would be the
+    // one slide where a losing result rendered as gibberish.
+    const sign = cell.lift >= 0 ? "+" : "−";
+    html += `<div class="gcell" style="background:${rampColor(cell.lift)};color:${dark ? "#fff" : "#0E2438"}">
+      ${sign}${Math.abs(cell.lift * 100).toFixed(1)}%
+      <span class="tick">${cell.clears ? "✓ clears +15%" : "✗ misses"}</span></div>`;
+  }
+}
+document.getElementById("grid").innerHTML = html;
+
+show(caseKey);
 </script>
+</body>
+</html>

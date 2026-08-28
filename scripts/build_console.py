@@ -30,6 +30,10 @@ from recoup.razorpay.config import load_dotenv
 
 ZERO_RETRY = ("INSTRUMENT_INVALID", "MANDATE_REVOKED", "RISK_DECLINE")
 
+EVIDENCE = Path("evidence")
+"""The committed bundle. Acts 2 and 3 read the frozen numbers rather than the
+numbers this run happens to produce, so the deck and the report cannot drift."""
+
 CASE_BLURB = {
     "hero": (
         "A dead card",
@@ -112,6 +116,89 @@ def totals_for(outcomes: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+
+TARGET_NET_LIFT = 0.15
+"""The spec's net-recovery target. A grid cell clears it or it does not."""
+
+
+def experiment_data(sweep: dict[str, Any], replication: dict[str, Any]) -> dict[str, Any]:
+    """Reshape the published bundle for the deck. Reads, never recomputes.
+
+    Every figure a slide shows comes straight out of ``sweep.json`` and
+    ``replication.json``. A dashboard that derived its own totals could disagree
+    with the report, and the disagreement would be silent -- it looks like a
+    rounding difference until somebody checks.
+    """
+    bands: dict[str, Any] = {}
+    for band, result in sweep["results"].items():
+        bands[band] = {
+            arm: {
+                "gross": result[arm]["gross_recovered_paise"],
+                "cost": result[arm]["total_cost_paise"],
+                "net": result[arm]["net_recovered_paise"],
+                "rate": result[arm]["recovery_rate"],
+                "recovered": result[arm]["recovered"],
+                "charges": result[arm]["charge_attempts"],
+                "per_recovery": result[arm]["attempts_per_recovery"],
+                "wasted": result[arm]["wasted_attempts"],
+                "hours": result[arm]["mean_hours_to_recovery"],
+                "per_subject_net": result[arm]["net_recovered_paise"] // result[arm]["cohort_size"],
+                "per_subject_cost": result[arm]["total_cost_paise"] // result[arm]["cohort_size"],
+            }
+            for arm in ("control", "treatment")
+        }
+
+    mid = sweep["results"]["mid"]
+    by_class = []
+    for cause, treatment in mid["treatment"]["money_by_class"].items():
+        control = mid["control"]["money_by_class"].get(cause, 0)
+        delta = treatment - control
+        by_class.append({
+            "cause": cause,
+            "control": control,
+            "treatment": treatment,
+            "delta": delta,
+            # The sign travels with the datum. Red and green are the one pair a
+            # colourblind reader cannot separate, so the fill colour is never
+            # the only thing saying which way a number went.
+            "sign": "+" if delta > 0 else "-" if delta < 0 else "",
+        })
+    by_class.sort(key=lambda r: -r["delta"])
+
+    by_mechanism = [
+        {
+            "mechanism": mech,
+            "control": mid["control"]["money_by_mechanism"].get(mech, 0),
+            "treatment": value,
+        }
+        for mech, value in sorted(
+            mid["treatment"]["money_by_mechanism"].items(), key=lambda kv: -kv[1]
+        )
+    ]
+
+    grid = []
+    for seed in replication["seeds"]:
+        for band in ("low", "mid", "high"):
+            arms = replication["sweeps"][str(seed)]["results"][band]
+            control = arms["control"]["net_recovered_paise"]
+            lift = (arms["treatment"]["net_recovered_paise"] - control) / control
+            grid.append({
+                "seed": seed,
+                "band": band,
+                "lift": lift,
+                "clears": lift >= TARGET_NET_LIFT,
+            })
+
+    return {
+        "bands": bands,
+        "by_class": by_class,
+        "by_mechanism": by_mechanism,
+        "grid": grid,
+        "seeds": list(replication["seeds"]),
+        "target": TARGET_NET_LIFT,
+    }
+
+
 def collect(config: RunConfig, workdir: Path, client: LLMClient | None) -> dict[str, Any]:
     arms: dict[str, tuple[dict, dict]] = {}
     for arm, run, kwargs in (
@@ -162,6 +249,10 @@ def collect(config: RunConfig, workdir: Path, client: LLMClient | None) -> dict[
         },
         "cases": cases,
         "totals": {arm: totals_for(outs) for arm, (outs, _) in arms.items()},
+        "experiment": experiment_data(
+            json.loads((EVIDENCE / "sweep.json").read_text(encoding="utf-8")),
+            json.loads((EVIDENCE / "replication.json").read_text(encoding="utf-8")),
+        ),
     }
 
 
