@@ -82,7 +82,7 @@ def _epoch(value: Any) -> datetime | None:
         return None
 
 
-def _failure_from_payment(
+def failure_from_payment(
     payment: dict[str, Any], entity_id: str, detected_at: datetime
 ) -> FailureEvent:
     return FailureEvent(
@@ -157,7 +157,7 @@ def scan_orders(
                     f"{attempts} attempt(s), last declined "
                     f"{latest.get('error_reason') or 'unknown'}"
                 ),
-                failure_event=_failure_from_payment(latest, order_id, now),
+                failure_event=failure_from_payment(latest, order_id, now),
             )
         )
     return signals
