@@ -287,8 +287,13 @@ function line(rec) {
   // file shows different clock times -- and near midnight, different dates --
   // depending on where it is opened.
   const OPTS = { timeZone: "UTC" };
-  const when = t.toLocaleDateString("en-GB", { day: "2-digit", month: "short", ...OPTS }) + " " +
-               t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", ...OPTS }) + "Z";
+  // Fixed three-letter month rather than the locale's "short", which yields
+  // "Sept" and knocks the timestamp column out of alignment against "Aug" in a
+  // monospace lane.
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const when = String(t.getUTCDate()).padStart(2, "0") + " " + MONTHS[t.getUTCMonth()] + " " +
+               String(t.getUTCHours()).padStart(2, "0") + ":" +
+               String(t.getUTCMinutes()).padStart(2, "0") + "Z";
   return { when, label, detail, rule, why, blocked: BLOCKED.has(rec.stage), win };
 }
 
