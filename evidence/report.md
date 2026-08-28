@@ -13,6 +13,13 @@ Measurement inputs hash `1f90b70d9afeb6a0` — the prompts, probability bands, b
 
 Gross lift ₹4,83,257.00 - net lift ₹4,88,363.70 - recovery rate +12.7pp - wasted attempts avoided 1779.
 
+Per failed charge, so the figure scales without knowing this cohort's size:
+
+| Per failed charge | Baseline | Recoup |
+|---|---|---|
+| Net recovered | ₹910.86 | ₹1,155.04 |
+| Spent chasing | ₹6.95 | ₹4.39 |
+
 ## Where the lift comes from
 
 Gross recovered per failure cause, both arms. A total is easy to take on trust; this is the table that says which causes actually earn it, and which ones the agent gives up on deliberately.

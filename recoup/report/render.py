@@ -114,6 +114,22 @@ def render_report(sweep: SweepResult, replication: ReplicationResult | None = No
     )
     lines.append("")
 
+    lines.append(
+        "Per failed charge, so the figure scales without knowing this cohort's size:"
+    )
+    lines.append("")
+    lines.append("| Per failed charge | Baseline | Recoup |")
+    lines.append("|---|---|---|")
+    lines.append(
+        f"| Net recovered | {format_rupees(mid.control.net_recovered_per_subject_paise)} "
+        f"| {format_rupees(mid.treatment.net_recovered_per_subject_paise)} |"
+    )
+    lines.append(
+        f"| Spent chasing | {format_rupees(mid.control.cost_per_subject_paise)} "
+        f"| {format_rupees(mid.treatment.cost_per_subject_paise)} |"
+    )
+    lines.append("")
+
     lines.append("## Where the lift comes from")
     lines.append("")
     lines.append(

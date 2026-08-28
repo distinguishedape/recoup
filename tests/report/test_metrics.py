@@ -231,3 +231,29 @@ def test_the_mechanism_breakdown_sums_to_the_total():
         outcome("c", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS, gross=29900, hours=1, via="pay_now_link"),
     ), "t")
     assert sum(m.money_by_mechanism.values()) == m.gross_recovered_paise
+
+
+def test_money_is_available_per_failed_charge_not_only_in_total():
+    """A total scales to nothing in a reader's head. Per-charge does.
+
+    Integer division, in paise, like every other money figure here -- a float
+    would be the first one in the codebase and there is no reason to start.
+    Denominated on every subject in the arm, recovered or not, which is the
+    same denominator ``net_recovered_paise`` uses, so the two cannot disagree.
+    """
+    m = compute_metrics(result(
+        outcome("a", TerminalState.RECOVERED, FailureClass.INSUFFICIENT_FUNDS,
+                gross=99900, cost=300, hours=1, via="retry"),
+        outcome("b", TerminalState.UNRECOVERED, FailureClass.INSUFFICIENT_FUNDS,
+                gross=0, cost=600),
+    ), "treatment")
+    assert m.cohort_size == 2
+    assert m.net_recovered_per_subject_paise == (99900 - 900) // 2
+    assert m.cost_per_subject_paise == 900 // 2
+
+
+def test_per_subject_money_is_zero_rather_than_a_crash_on_an_empty_arm():
+    m = compute_metrics(result(), "treatment")
+    assert m.cohort_size == 0
+    assert m.net_recovered_per_subject_paise == 0
+    assert m.cost_per_subject_paise == 0

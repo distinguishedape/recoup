@@ -137,3 +137,13 @@ def test_the_report_prints_the_measurement_inputs_hash(sweep):
     report = render_report(sweep)
     assert "measurement inputs" in report.lower()
     assert inputs_hash() in report
+
+
+def test_the_report_states_the_per_charge_economics(sweep):
+    """The headline totals depend on the cohort size; these do not, so a reader
+    can multiply them by whatever volume they actually have."""
+    report = render_report(sweep)
+    assert "per failed charge" in report.lower()
+    mid = sweep.results[Band.MID.value]
+    assert format_rupees(mid.treatment.net_recovered_per_subject_paise) in report
+    assert format_rupees(mid.treatment.cost_per_subject_paise) in report

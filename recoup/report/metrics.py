@@ -65,6 +65,28 @@ class ArmMetrics(BaseModel):
     reader can see how much of a lift a new intervention is responsible for
     rather than taking the total on trust."""
 
+    @property
+    def net_recovered_per_subject_paise(self) -> int:
+        """Net recovery per failed charge -- the figure a reader can scale.
+
+        A total depends on this cohort's size and therefore scales to nothing
+        in a reader's head; this one multiplies by whatever volume they
+        actually have. Denominated on every subject in the arm, recovered or
+        not, which is the same denominator ``net_recovered_paise`` uses, so
+        the two cannot disagree. Integer division in paise, like every other
+        money figure here.
+        """
+        if self.cohort_size == 0:
+            return 0
+        return self.net_recovered_paise // self.cohort_size
+
+    @property
+    def cost_per_subject_paise(self) -> int:
+        """What chasing one failed charge costs, recovered or not."""
+        if self.cohort_size == 0:
+            return 0
+        return self.total_cost_paise // self.cohort_size
+
 
 class Comparison(BaseModel):
     model_config = ConfigDict(frozen=True)
