@@ -10,3 +10,6 @@ artifacts/
 # Design spec, implementation plans and agent scratch stay local
 docs/superpowers/
 .superpowers/
+
+# Generated knowledge graph (rebuild with /graphify)
+graphify-out/
