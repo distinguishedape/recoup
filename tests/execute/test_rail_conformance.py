@@ -23,6 +23,7 @@ from recoup.execute.rail import PaymentRail, SimulatedRail
 from recoup.execute.razorpay_rail import RazorpayTestRail
 from tests.execute.test_executor import ConfigurablePayNowRail
 from tests.live.test_agent import FakeRail, RefusingRail
+from tests.scripts.test_demo import _StubRail
 
 IMPLEMENTATIONS = [
     SimulatedRail,
@@ -30,6 +31,7 @@ IMPLEMENTATIONS = [
     FakeRail,
     RefusingRail,
     ConfigurablePayNowRail,
+    _StubRail,
 ]
 
 

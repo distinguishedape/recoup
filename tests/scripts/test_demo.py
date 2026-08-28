@@ -12,7 +12,13 @@ import pytest
 from recoup.audit.log import AuditLog, new_record
 from recoup.execute.razorpay_rail import ManualRetryUnsupported
 from recoup.razorpay.config import RazorpayConfig
-from scripts.demo import find_failed_payment, narrate, narrate_stages, run_demo
+from scripts.demo import (
+    AdvancingClock,
+    find_failed_payment,
+    narrate,
+    narrate_stages,
+    run_demo,
+)
 
 NOW = datetime(2026, 8, 27, 9, 0, tzinfo=timezone.utc)
 CONFIG = RazorpayConfig(key_id="rzp_test_x", key_secret="s", webhook_secret="w")
@@ -84,6 +90,7 @@ def test_the_narration_names_the_cause_the_plan_and_the_rule(tmp_path):
         audit=audit,
         subscription_id=None,
         now=NOW,
+        clock=AdvancingClock(MIDDAY_IST),
     )
     joined = "\n".join(lines)
     assert "INSUFFICIENT_FUNDS" in joined
@@ -100,6 +107,7 @@ def test_the_narration_reads_only_what_the_log_recorded(tmp_path):
         audit=audit,
         subscription_id=None,
         now=NOW,
+        clock=AdvancingClock(MIDDAY_IST),
     )
     recorded = {r.stage for r in audit.reconstruct("sub_DEMO1")}
     lines = narrate_stages(audit, "sub_DEMO1")
@@ -115,6 +123,11 @@ def test_a_dry_run_replays_the_recorded_transcript_without_a_network(capsys):
     out = capsys.readouterr().out
     assert "recorded" in out.lower()
     assert "https://" in out
+
+
+
+MIDDAY_IST = datetime(2026, 8, 27, 6, 30, tzinfo=timezone.utc)   # 12:00 IST, window open
+EVENING_IST = datetime(2026, 8, 27, 13, 40, tzinfo=timezone.utc)  # 19:10 IST, window shut
 
 
 class _StubRail:
@@ -167,3 +180,32 @@ class _StubRail:
 
     def deliver_pay_now_link(self, subscription_id, now):
         return False
+
+
+def test_the_link_is_still_created_when_the_demo_runs_after_hours(tmp_path):
+    """19:10 IST, contact window shut. This is the case that matters.
+
+    Judging happens in the evening. The first contact is denied and rescheduled
+    to 08:00, and the pay-now link sits behind it in the ladder -- so a demo
+    that only followed reschedules of the link itself gave up here and produced
+    no link at all, at exactly the hour someone is most likely to be watching.
+    It follows any reschedule now, and the trace is better for it: the judge
+    sees the compliance rule fire and the money still arrive.
+    """
+    audit = AuditLog(tmp_path / "evening.db")
+    try:
+        lines = run_demo(
+            read_client=FakeReadClient([FAILED_PAYMENT], [SUBSCRIPTION]),
+            rail=_StubRail(audit),
+            audit=audit,
+            subscription_id=None,
+            now=NOW,
+            clock=AdvancingClock(EVENING_IST),
+        )
+    finally:
+        audit.close()
+    joined = "\n".join(lines)
+    assert "rescheduled" in joined, "the window should have denied the first contact"
+    assert "https://example.invalid/pay/sub_DEMO1" in joined, (
+        "the link must still be created after following the reschedule"
+    )

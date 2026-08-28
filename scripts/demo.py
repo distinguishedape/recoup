@@ -39,6 +39,8 @@ from recoup.audit.log import AuditLog, new_record
 from recoup.detect.scanner import failure_from_payment
 from recoup.execute.razorpay_rail import RazorpayTestRail, build_client
 from recoup.live.agent import LiveAgent
+from recoup.models.enums import Tier
+from recoup.policy.rules import MAX_RESCHEDULES
 from recoup.razorpay.client import RazorpayReadClient
 from recoup.razorpay.config import load_config
 from recoup.razorpay.payment_links import PaymentLinkWriter
@@ -46,12 +48,20 @@ from recoup.razorpay.payment_links import PaymentLinkWriter
 TRANSCRIPT = Path("evidence/demo-transcript.md")
 DASHBOARD = "https://dashboard.razorpay.com/app/payment-links"
 PAY_NOW_LINK_ACTION_TYPE = "pay_now_link"
-MAX_CONTACT_WINDOW_ADVANCES = 5
-"""How many contact-window reschedules run_demo will follow before giving up.
+MAX_ADVANCE_PASSES = MAX_RESCHEDULES + len(Tier)
+"""How many ``due()`` passes run_demo will make before giving up.
 
-Bounded by the same MAX_RESCHEDULES the policy gate itself enforces
-(recoup/policy/rules.py); this just stops the demo from looping past what the
-gate would ever actually allow."""
+Two things can hold an action back and each needs its own pass, so the bound is
+the sum of both ceilings rather than either alone: the contact window can
+reschedule it up to ``MAX_RESCHEDULES`` times (recoup/policy/rules.py), and the
+escalation ladder opens one tier at a time, so a T2 action can wait behind up to
+``len(Tier)`` predecessors executing.
+
+This was a hardcoded 5 whose docstring claimed parity with ``MAX_RESCHEDULES``,
+which is 3 -- a number that agreed with nothing. Deriving it is the same
+correction D59 had to make when two fixtures hardcoded ``contacts=1`` and
+silently inverted their own meaning after the budget moved. The bound only stops
+a runaway loop; it is not a behaviour anyone should be tuning."""
 
 STAGE_LABEL = {
     "classify": "cause identified",
@@ -66,6 +76,34 @@ STAGE_LABEL = {
     "pay_now_link_unavailable": "no link created -- refused to guess",
     "pay_now_link_payment_unknown": "payment not asserted; conversion arrives by reconciliation",
 }
+
+
+class AdvancingClock:
+    """A clock the demo moves forward deliberately.
+
+    ``LiveAgent`` defaults to a ``RealClock``, and that makes a fast-forward
+    impossible: ``due(when)`` picks what is *ready* by ``when``, but the
+    executor still gates and stamps every action at ``clock.now``. Run the demo
+    at 19:10 IST with a real clock and the contact window denies every contact
+    forever, however far ahead the caller asks to look -- so the pay-now link is
+    never reached and the demo produces nothing, at exactly the hour a judge is
+    most likely to be watching.
+
+    Moving the clock is what "advancing to T+25h" already meant; this makes it
+    literal. Only the agent's own sense of time is moved -- the Razorpay link it
+    creates is created for real, now.
+    """
+
+    def __init__(self, instant: datetime) -> None:
+        self._instant = instant
+
+    @property
+    def now(self) -> datetime:
+        return self._instant
+
+    def advance_to(self, instant: datetime) -> None:
+        """Never rewinds: time in a ladder only runs one way."""
+        self._instant = max(self._instant, instant)
 
 
 def find_failed_payment(
@@ -156,17 +194,59 @@ def _advance_to(
     """Run the ladder forward to and through one action, the way a live
     scheduler would -- including following a contact-window reschedule to its
     new time rather than executing the action before the gate permits it.
+
+    It follows a reschedule of *any* action, not only the target's own. The
+    ladder is sequential: a notify pushed to tomorrow morning holds the pay-now
+    link behind it, so watching only the target means giving up the moment its
+    predecessor is the thing that got moved. That is not hypothetical -- run the
+    demo after 19:00 IST and the very first contact is rescheduled, which is
+    exactly when a judge is most likely to be watching.
     """
-    for _ in range(MAX_CONTACT_WINDOW_ADVANCES):
-        agent.due(when)
-        latest = [
-            r
-            for r in audit.reconstruct(subscription_id)
-            if r.payload.get("action_type") == action_type
-        ]
-        if not latest or latest[-1].stage != "contact_rescheduled":
+    # Seeded with the reschedules the T0 handle() call already produced, not
+    # just the target's own time. Jumping straight to the target fires it while
+    # a predecessor is still parked -- the ladder answers "tier 2 cannot be
+    # entered from tier 1" and *discards* the action, so no later pass can
+    # recover it. After 19:00 IST the very first notify is rescheduled, which
+    # made this the ordinary evening case rather than an edge one.
+    pending: set[datetime] = {when}
+    pending.update(
+        datetime.fromisoformat(r.payload["rescheduled_to"])
+        for r in audit.reconstruct(subscription_id)
+        if r.stage == "contact_rescheduled"
+    )
+    advance = getattr(agent.clock, "advance_to", None)
+
+    for _ in range(MAX_ADVANCE_PASSES):
+        before = len(audit.reconstruct(subscription_id))
+
+        # Earliest time still ahead of us, else simply run again at the time we
+        # already reached. Ascending, always: ``due(t)`` runs everything
+        # scheduled at or before ``t``, so jumping to the later time first would
+        # fire the target ahead of the contact queued in front of it, which is
+        # the ordering the ladder exists to enforce. And the second pass at the
+        # *same* instant matters as much as the jumps -- once a rescheduled
+        # notify finally executes, the tier it was blocking opens, and the
+        # pay-now link behind it needs one more tick to run.
+        upcoming = sorted(t for t in pending if t > agent.clock.now)
+        step = upcoming[0] if upcoming else agent.clock.now
+        if advance is not None:
+            advance(step)
+        agent.due(max(step, agent.clock.now))
+
+        records = audit.reconstruct(subscription_id)
+        if any(
+            r.payload.get("action_type") == action_type
+            and r.stage in ("execute", "execute_unsupported")
+            for r in records
+        ):
             return
-        when = datetime.fromisoformat(latest[-1].payload["rescheduled_to"])
+        if len(records) == before:
+            return  # a pass that records nothing will not record anything later
+        pending.update(
+            datetime.fromisoformat(r.payload["rescheduled_to"])
+            for r in records
+            if r.stage == "contact_rescheduled"
+        )
 
 
 def run_demo(
@@ -175,10 +255,18 @@ def run_demo(
     audit: AuditLog,
     subscription_id: str | None,
     now: datetime,
+    clock: Any = None,
 ) -> list[str]:
+    """Run one subject end to end and return the narration.
+
+    ``clock`` is injectable so a caller -- a test, or a rehearsal -- can pin the
+    time. Left to the real clock, everything here depends on the hour it runs
+    at, because the contact window is a real rule and 19:00 IST is a real
+    boundary.
+    """
     payment, sub_id = find_failed_payment(read_client, subscription_id)
     event = failure_from_payment(payment, sub_id, now)
-    agent = LiveAgent(audit=audit, rail=rail)
+    agent = LiveAgent(audit=audit, rail=rail, clock=clock or AdvancingClock(now))
     agent.handle(event, amount_paise=int(payment.get("amount") or 0))
 
     schedule = _scheduled_time(audit, sub_id, PAY_NOW_LINK_ACTION_TYPE)
@@ -242,9 +330,10 @@ def main(argv: list[str] | None = None) -> int:
             build_client(config), config, links=PaymentLinkWriter(config), audit=audit
         )
         print("Recoup -- live, against Razorpay test mode\n")
+        started = datetime.now(timezone.utc)
         lines = run_demo(
             RazorpayReadClient(config), rail, audit, args.subscription,
-            datetime.now(timezone.utc),
+            started, clock=AdvancingClock(started),
         )
         _print_slowly(lines, args.pause)
         print(f"\n  open {DASHBOARD} -- the link above is there now.")
