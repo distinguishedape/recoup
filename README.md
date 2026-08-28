@@ -6,6 +6,39 @@ compliance limits, and measures itself against the retry ladder it replaces.
 
 Built for the Razorpay AI Buildathon, Track 03 — AI Revenue Recovery.
 
+| Mid band, 2,000 failed charges | Baseline ladder | Recoup |
+|---|---|---|
+| Net recovered | ₹18,21,720 | **₹23,10,084** — +26.8% |
+| Recovery rate | 46.0% | **58.7%** |
+| Wasted attempts on causes a retry cannot fix | 1,782 | **3** |
+| Cost of chasing | ₹13,902 | **₹8,795** |
+
+Per failed charge — the figure that scales to your own volume — that is
+**₹1,155 recovered against ₹911**, a lift of ₹244, at ₹4.39 spent chasing
+instead of ₹6.95. All five findings **replicate in 4/4 independent cohorts**,
+and net lift clears its +15% target in all twelve cells of the three-band,
+four-cohort grid.
+
+**What is real and what is not.** Ingestion, detection and payment-link creation
+run against live Razorpay: a signed `payment.failed` event was delivered over the
+public internet and classified, and the scanner found ₹3,497 of at-risk revenue
+on its first run. Recovery *outcomes* are simulated, because Razorpay test mode
+cannot inject a decline reason — all eight documented error-scenario cards were
+paid and all eight returned one indistinguishable string. The live rail's
+`charge()` raises rather than returning a plausible number, so a simulated
+outcome cannot enter through the path labelled real.
+
+```bash
+python -m scripts.demo          # a real decline becomes a real payment link, live
+python -m scripts.scan          # go looking for revenue at risk, read-only
+python -m scripts.replay sub_0429 --audit-db artifacts/audit/mid/treatment.db
+```
+
+That last one is one customer's whole story out of an append-only log: notified,
+retry declined, the pay-now link **denied by the contact window at 19:02 IST and
+rescheduled rather than dropped**, executed at 08:00 the next morning, paid, and
+the ladder stopping itself.
+
 ---
 
 ## The problem
