@@ -109,6 +109,15 @@ seniority rather than enthusiasm.
 
 Deliver this **before** anyone forms the objection. Once, then move on.
 
+## 4:15 — One line, only if you are ahead of the clock
+
+Skip this without hesitation if you are not. It is the single best "these people
+are serious" detail in the repository, and it costs eight seconds:
+
+> "Our second commit — before the domain models, before any recovery logic — was
+> the engineering decision log. It is 65 entries now. Every choice, and what it
+> costs if the choice was wrong."
+
 ## 4:30 — The ask
 
 > "The one thing we need that Razorpay does not expose: manual retry for
@@ -125,10 +134,12 @@ close than asking for a prize.
 All of it earns marks in the repo. None survives a five-minute clock.
 
 - The sweep methodology and the replication rules
-- The decision log (65 entries)
+- The decision log itself — the one-line mention at 4:15 is the whole budget for it
 - The four defects found in our own measurement pipeline — **one line at most**,
-  if it fits: *"we audited our own measurement pipeline and published what we
-  found."* Any longer and rigour reads as instability.
+  and use this wording, which is stronger than the old one because it says where
+  the bugs were: *"Every serious defect we found was in the measurement, not the
+  product — four of them, all published."* That lands as rigour. Any longer and
+  it reads as instability.
 - The measurement-inputs freeze and the drift guard
 - The architecture diagram
 

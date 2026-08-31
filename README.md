@@ -422,8 +422,10 @@ recovery, and the honest account of how it got from there to here is the
 [decision log](docs/decisions.md) — 65 entries, including every defect found in
 the measurement pipeline itself.
 
-Four of those are worth knowing about, because all four were in the harness that
-measures the product rather than the product:
+The pattern across them is worth stating plainly: **every serious defect this
+project found was in the measurement, not the product.** Four of them, and each
+shares a shape — the claim was *true when written* and stopped being true without
+anything failing:
 
 1. **The experiment ran with the model disconnected.** 930 of 1,542 ambiguous
    classifications never reached a model, and the degraded run scored *higher*.
@@ -438,9 +440,18 @@ measures the product rather than the product:
    whose planner prompt had been rewritten — a guarantee a reader could point at,
    which is worse than none.
 
+The fix in every case was the same move: make the claim executable rather than
+asserted. A recorded fixture instead of a comment, a runner that refuses to publish
+a degraded bundle, a freeze that registers the prompts it was silently ignoring.
+
 Budgets were widened once *after* seeing a loss, which is exactly what
 pre-registration guards against; that is disclosed as D40, and the one budget
 change since was made and written down **before** re-measuring.
+
+The habit predates the defects. **The second commit in this repository — before the
+domain models, before any recovery logic — was the decision log itself**
+(`361da51`, 25 Aug). A full narrative history reconstructed from that log and the
+session timeline is at [`docs/journey-into-recoup.md`](docs/journey-into-recoup.md).
 
 ---
 

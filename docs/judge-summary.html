@@ -410,7 +410,9 @@ ladder_block          —                     rule=recovered
     <div class="body">
       <h2>We tried to break our own result</h2>
       <p>The experiment ran four more times across independent cohorts to see what survived. Then the measurement pipeline itself was audited, and <strong>four defects were found and published</strong> — a run where the model was silently disconnected, an audit log that stacked runs on top of each other, a reproduce-offline claim that had quietly stopped working, and a configuration freeze that was hiding prompt changes from the numbers it certified.</p>
-      <p>None of them was in the pipeline. All four were in the harness that measures it, which is the harder place to look.</p>
+      <p class="pull">Every serious defect we found was in the measurement, not the product.</p>
+      <p>All four were in the harness rather than the pipeline, which is the harder place to look and the place a reader has least reason to trust. The pattern they share is that each claim was <em>true when written</em> and stopped being true without anything failing — so the fix in every case was to make the claim executable: a recorded fixture instead of a comment, a runner that refuses to publish a degraded bundle, a freeze that registers the prompts.</p>
+      <p>The habit is older than the defects. <strong>The second commit in this repository, before the domain models and before any recovery logic, was the engineering decision log</strong> — now 65 entries of what was chosen and what it costs if the choice was wrong.</p>
     </div>
   </section>
 
