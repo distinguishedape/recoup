@@ -46,7 +46,7 @@ a better trace than the happy path. Say:
 > rather than dropping it, and the money still arrives."
 
 **Fallback if the network dies:** `python -m scripts.demo --dry-run`. Say
-plainly "this is a recording of a run we made earlier." Never imply it is live.
+plainly "this is a recording of a run I made earlier." Never imply it is live.
 
 ## 2:00 — The replay
 
@@ -61,17 +61,18 @@ delete path. Point at the blocked line:
 > was denied by the contact window at 19:02 and rescheduled to eight the next
 > morning. Then the customer paid."
 
-Ten seconds. No other submission will have this.
+Ten seconds. Few submissions can show a refusal, and that is the point of
+showing it.
 
-## 2:30 — Where the money comes from, and where we lose
+## 2:30 — Where the money comes from, and where I lose
 
 Per-cause table. Dead cards: **₹11,996 → ₹2,56,874**, twenty-onefold.
 
 Then, unprompted, before anyone asks:
 
-> "We lose on `TRANSIENT_ISSUER` by ₹30,490. An outage is the one cause a plain
-> retry ladder already suits, and we spend fewer attempts on it by design. And
-> we give up ₹499 on `RISK_DECLINE` on purpose, because that routes to a human
+> "I lose on `TRANSIENT_ISSUER` by ₹30,490. An outage is the one cause a plain
+> retry ladder already suits, and I spend fewer attempts on it by design. And I
+> give up ₹499 on `RISK_DECLINE` on purpose, because that routes to a human
 > instead of arguing with a bank's fraud decision."
 
 Volunteering the losses is what makes the wins credible. This is also the answer
@@ -87,9 +88,16 @@ action depends on the cause, and the cause determines whether any action helps.
 > to invent a failure class or retry a dead card five times, every proposal is
 > rejected and the deterministic planner runs instead."
 
-Do **not** volunteer the money ablation here. It is honestly reported as not
-replicating in the report, where a judge who digs will find it and trust you
-more. A null result offered mid-pitch costs the room.
+Have this sentence ready, and say it the moment anyone asks what the model is
+worth in money rather than in accuracy:
+
+> "Its money contribution does not replicate — positive in three cohorts out of
+> four — so I don't claim it. The classification gain does replicate, and that is
+> the part I'm standing behind."
+
+It is reported as not replicating in the report either way. A five-minute clock
+is a reason to keep it to one prepared sentence, not a reason to hope it doesn't
+come up: the answer is a better look than the claim would have been.
 
 ## 3:45 — Compliance
 
@@ -99,28 +107,36 @@ more. A null result offered mid-pitch costs the room.
 For a payments company under RBI e-mandate rules, this is the line that reads as
 seniority rather than enthusiasm.
 
-## 4:00 — The honesty line, once
+## 4:00 — The honesty line, once — and it is a finding, not an apology
 
-> "Recovery outcomes are simulated, and here is why: we paid all eight of
-> Razorpay's documented error-scenario cards, and all eight returned one
-> indistinguishable string. A classifier cannot be exercised against real
-> declines that carry no cause. So we swept every probability across three bands
-> and four cohorts, and we report a finding only if it holds in every one."
+> "Recovery outcomes are simulated, and the reason is a finding about your
+> platform: I paid all eight of Razorpay's documented error-scenario cards,
+> confirmed each by `last4`, and all eight came back as one indistinguishable
+> string. In my cohort about 15% of declines are too vague for the lookup table.
+> On your live rails it is 100%. A classifier cannot be exercised against
+> declines that carry no cause — so I swept every probability across three bands
+> and four cohorts, and I report a finding only if it holds in every one."
 
 Deliver this **before** anyone forms the objection. Once, then move on.
+
+This is the beat to spend a spare ten seconds on rather than any other. It turns
+the weakest thing about the submission — that outcomes are modelled — into the
+strongest thing in it, which is a measured gap in the sponsor's own sandbox that
+nobody else in the room went and paid to find. `evidence/error-card-walk.md` and
+`tests/classify/test_ambiguity_gap.py` are where it lives if asked.
 
 ## 4:15 — One line, only if you are ahead of the clock
 
 Skip this without hesitation if you are not. It is the single best "these people
 are serious" detail in the repository, and it costs eight seconds:
 
-> "Our second commit — before the domain models, before any recovery logic — was
-> the engineering decision log. It is 65 entries now. Every choice, and what it
+> "My second commit — before the domain models, before any recovery logic — was
+> the engineering decision log. It is 68 entries now. Every choice, and what it
 > costs if the choice was wrong."
 
 ## 4:30 — The ask
 
-> "The one thing we need that Razorpay does not expose: manual retry for
+> "The one thing I need that Razorpay does not expose: manual retry for
 > subscription invoices on domestic cards. Everything else in this pipeline is
 > live today."
 
@@ -135,11 +151,15 @@ All of it earns marks in the repo. None survives a five-minute clock.
 
 - The sweep methodology and the replication rules
 - The decision log itself — the one-line mention at 4:15 is the whole budget for it
-- The four defects found in our own measurement pipeline — **one line at most**,
+- The four defects found in my own measurement pipeline — **one line at most**,
   and use this wording, which is stronger than the old one because it says where
-  the bugs were: *"Every serious defect we found was in the measurement, not the
+  the bugs were: *"Every serious defect I found was in the measurement, not the
   product — four of them, all published."* That lands as rigour. Any longer and
   it reads as instability.
+- The schedule ablation — it belongs in the repo and in Q&A, not in the running
+  order. One sentence if challenged on the lift: *"Forced onto the baseline's own
+  retry schedule, most of the lift is still there; it's in
+  `evidence/schedule-ablation.md`."*
 - The measurement-inputs freeze and the drift guard
 - The architecture diagram
 

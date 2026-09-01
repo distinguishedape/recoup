@@ -6,6 +6,13 @@ compliance limits, and measures itself against the retry ladder it replaces.
 
 Built for the Razorpay AI Buildathon — Track 03, AI Revenue Recovery.
 
+> **Read the table as a model, not a bank statement.** The pipeline is real —
+> Razorpay signs the webhook, the payment links are live — but *whether a
+> contacted customer pays* is simulated, because Razorpay's sandbox returns one
+> indistinguishable error for all eight of its documented decline scenarios.
+> [What is real, and what is simulated](#what-is-real-and-what-is-simulated) is
+> the honest version of this sentence, and it is worth reading before the numbers.
+
 | Mid band, 2,000 failed charges | Baseline ladder | Recoup | |
 |---|---|---|---|
 | **Net recovered** | ₹18,21,720 | **₹23,10,084** | **+₹4,88,364** · +26.8% |
@@ -18,13 +25,20 @@ Built for the Razorpay AI Buildathon — Track 03, AI Revenue Recovery.
 Replicates in **4 of 4** independent cohorts. Net lift clears its +15% target in
 **all twelve cells** of the three-band, four-cohort grid; the worst is +21.6%.
 
+The obvious objection is that the two arms retry on different schedules, and the
+sweep never varied that. So it is taken away instead of argued about: forced onto
+the baseline's own 24/48/72 ladder, leaving *channel choice* as the only
+difference, **about 91% of the lift remains — +24.32% to +27.19%, in all four
+cohorts** ([`evidence/schedule-ablation.md`](evidence/schedule-ablation.md), and
+[D66](docs/decisions.md)).
+
 ```bash
 python -m scripts.demo          # a real decline becomes a real payment link, live
 python -m scripts.scan          # go looking for revenue at risk, read-only
 python -m scripts.replay sub_0429 --audit-db artifacts/audit/mid/treatment.db
 ```
 
-📄 **[One-page judge summary](https://claude.ai/code/artifact/a42011e0-b5de-4a2c-857a-eabb5ae73ab4)** · 🎤 [Five-minute pitch order](docs/pitch.md) · 📓 [Decision log, 65 entries](docs/decisions.md)
+📄 **[One-page judge summary](https://claude.ai/code/artifact/a42011e0-b5de-4a2c-857a-eabb5ae73ab4)** · 🎤 [Five-minute pitch order](docs/pitch.md) · 📓 [Decision log, 68 entries](docs/decisions.md)
 
 ---
 
@@ -53,6 +67,29 @@ UNCLASSIFIED         notify → retry 24h → pay-now link 25h → retry 72h →
 
 The baseline runs one row for **every** cause: notify, then retry at T+1, T+2,
 T+3. No link, no request for a new card, and no stopping.
+
+## What this is not
+
+Razorpay already retries failed subscription charges, and Recoup is not a claim
+that it doesn't. What it does not do is *branch on the reason*. The published
+behaviour is a fixed schedule — the test-mode page documents reattempts at ten
+minutes and an hour before halting, the retries page documents day-stepping with
+bank holidays shifting the date — and in both, the same ladder runs whether the
+customer was short of money or revoked the mandate last week. The decision the
+schedule cannot make is the one this project is about.
+
+So the delta is three things, and only three:
+
+- **A cause is resolved before an action is chosen**, from the decline reason
+  rather than from the attempt count.
+- **Two causes get a channel a retry ladder has no way to offer** — a pay-now
+  link for a shortfall, a card-update request for a dead instrument. Retrying
+  either is spend with no mechanism behind it.
+- **One cause stops the ladder entirely.** `MANDATE_REVOKED` never charges and
+  never messages, which is a compliance position rather than an optimisation.
+
+Everything else here — the retry transport, the payment links, the webhooks — is
+Razorpay's, called rather than reimplemented.
 
 ---
 
@@ -352,7 +389,7 @@ is a floor it has to clear, not merely a fallback.
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q                       # 668 tests
+python -m pytest -q                       # 681 tests
 
 python -m scripts.run_experiment --cohort-size 2000 --seed 3 \
     --replicate 11,29,47 --out-dir artifacts --freeze
@@ -419,7 +456,7 @@ For the live Razorpay path, see
 
 An earlier version of this README reported Recoup **losing** 2.26% of gross
 recovery, and the honest account of how it got from there to here is the
-[decision log](docs/decisions.md) — 65 entries, including every defect found in
+[decision log](docs/decisions.md) — 68 entries, including every defect found in
 the measurement pipeline itself.
 
 The pattern across them is worth stating plainly: **every serious defect this
@@ -444,6 +481,19 @@ The fix in every case was the same move: make the claim executable rather than
 asserted. A recorded fixture instead of a comment, a runner that refuses to publish
 a degraded bundle, a freeze that registers the prompts it was silently ignoring.
 
+A later review found three more, and they are a different kind: nothing had
+broken, and nothing published was false. What was missing was disclosure. The two
+arms retried on different schedules and the sweep never varied it ([D66](docs/decisions.md));
+the probability model both selects the plan and draws the outcome ([D67](docs/decisions.md));
+and the classifier's accuracy is measured on a reason mix roughly six times less
+ambiguous than the one Razorpay actually sends ([D68](docs/decisions.md)). Two of
+the three are now runnable rather than argued —
+[`scripts/ablate_schedule`](scripts/ablate_schedule.py) and
+`tests/classify/test_ambiguity_gap.py` — and the third is written down where a
+reader will hit it. A result that survives being attacked is worth more than one
+that was never tested; the ablation is in the repo precisely because it could
+have gone the other way.
+
 Budgets were widened once *after* seeing a loss, which is exactly what
 pre-registration guards against; that is disclosed as D40, and the one budget
 change since was made and written down **before** re-measuring.
@@ -460,8 +510,8 @@ session timeline is at [`docs/journey-into-recoup.md`](docs/journey-into-recoup.
 | Path | What's in it |
 |---|---|
 | `recoup/` | The pipeline — see the architecture table above |
-| `scripts/` | `demo`, `scan`, `replay`, `run_experiment`, `build_console` |
-| `tests/` | 668 tests, including a conformance test over every payment rail |
-| `evidence/` | The generated bundle: report, sweep, replication, audit CSVs, console |
+| `scripts/` | `demo`, `scan`, `replay`, `run_experiment`, `ablate_schedule`, `build_console` |
+| `tests/` | 681 tests, including a conformance test over every payment rail |
+| `evidence/` | The generated bundle: report, sweep, replication, audit CSVs, console, schedule ablation |
 | `docs/decisions.md` | Every problem hit, what was chosen, and what it costs if wrong |
 | `docs/pitch.md` | The five-minute running order |
