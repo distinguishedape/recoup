@@ -12,6 +12,12 @@ deliberately do not handle returns 200 with ``status: ignored`` -- a 404
 or a 422 there would produce an endless retry loop for an event that will
 never be processable. Only a genuinely malformed or unauthenticated
 request gets a 400, because those *should* stop.
+
+Because Razorpay retries, delivery is at-least-once and duplicate
+suppression is load-bearing rather than tidy: the same event arriving
+twice is the same charge attempted twice. Dedup therefore asks the audit
+log, which is durable and shared, rather than a per-process set that a
+restart empties and a second worker never sees.
 """
 
 import json
@@ -40,7 +46,6 @@ def create_app(
     sink: EventSink | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Recoup webhook receiver")
-    seen_event_ids: set[str] = set()
 
     def _json_response(payload: dict[str, Any], status_code: int = 200) -> Response:
         return Response(
@@ -93,11 +98,10 @@ def create_app(
         received_at = datetime.now(timezone.utc)
         event = mapper(payload, received_at)
 
-        if event.event_id in seen_event_ids:
+        if audit.has_ingested(event.event_id):
             return _json_response(
                 {"status": "duplicate", "subscription_id": event.subscription_id}
             )
-        seen_event_ids.add(event.event_id)
 
         audit.append(
             new_record(

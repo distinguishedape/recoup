@@ -124,6 +124,35 @@ def test_a_replayed_event_is_processed_only_once(harness):
     assert len(received) == 1
 
 
+def test_a_replayed_event_is_still_refused_by_a_restarted_receiver(tmp_path):
+    """The case a per-process set cannot answer.
+
+    Razorpay's delivery is at-least-once, so the duplicate can arrive after a
+    deploy, or at a second worker that never saw the first. Dedup that lives in
+    memory says "new" to both, and a charge is attempted twice. The audit log is
+    durable and shared, so it is asked instead -- and this asserts the answer
+    survives the process that recorded it going away.
+    """
+    db = tmp_path / "shared-audit.db"
+
+    first_audit = AuditLog(db)
+    first_received = []
+    with TestClient(create_app(config(), first_audit, sink=first_received.append)) as client:
+        assert post(client, FIXTURE).json()["status"] == "accepted"
+    first_audit.close()
+
+    restarted_audit = AuditLog(db)
+    restarted_received = []
+    with TestClient(
+        create_app(config(), restarted_audit, sink=restarted_received.append)
+    ) as client:
+        response = post(client, FIXTURE)
+    restarted_audit.close()
+
+    assert response.json()["status"] == "duplicate"
+    assert first_received and not restarted_received
+
+
 def test_the_signature_is_checked_against_the_bytes_razorpay_sent(harness):
     client, _, received = harness
     body = (

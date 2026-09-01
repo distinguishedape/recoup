@@ -122,6 +122,27 @@ class AuditLog:
     def reconstruct(self, subscription_id: str) -> list[AuditRecord]:
         return self._query("WHERE subscription_id = ?", (subscription_id,))
 
+    def has_ingested(self, event_id: str) -> bool:
+        """Whether this event was already received and recorded.
+
+        Webhook delivery is at-least-once, so the receiver has to answer "have I
+        seen this before" across a restart and across workers. The answer already
+        exists: ingestion appends a record carrying the whole event, and this log
+        is durable and append-only. Asking it is therefore the same question with
+        no second place to keep the answer -- and no window in which a process
+        that has recorded a charge has forgotten it.
+
+        ponytail: unindexed json_extract scan. Fine at webhook rates; if volume
+        ever justifies it, add an expression index on
+        ``json_extract(payload, '$.event_id') WHERE stage = 'ingest'``.
+        """
+        sql = (
+            "SELECT 1 FROM audit WHERE stage = 'ingest' "
+            "AND json_extract(payload, '$.event_id') = ? LIMIT 1"
+        )
+        with self._lock:
+            return self._conn.execute(sql, (event_id,)).fetchone() is not None
+
     def export_csv(self, path: Path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
