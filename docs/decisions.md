@@ -1566,3 +1566,98 @@ saw a link created and then silence, which reads like a hole in the evidence rat
 refusal it is — in a system whose central claim is an append-only log where every decision names
 itself. It now appends `pay_now_link_payment_unknown` saying so. `SimulatedRail` is untouched, so
 no measured number moves.
+
+### D66. The treatment's retry schedule was an advantage the sweep never varied
+
+The two arms differed in two ways at once and only one of them was ever
+registered as an assumption. The treatment retries a shortfall at 24/72/120h and
+the control at 24/48/72h, against a timing model where a shortfall's
+recoverability climbs with waiting — `ceiling=1.55`, `half_life_hours=60`. Run
+the curve and the treatment's multipliers are 0.72/1.07/1.28 where the control's
+are 0.72/0.92/1.07, on the 40% of the cohort that fails for want of funds. The
+later schedule is handed a better draw before any intervention happens.
+
+The Low/Mid/High sweep does not cover this, and reporting "survives in all twelve
+cells" implied that it did. The bands vary retry success and conversion, which
+scale *both* arms; `TIMING` appears nowhere in `experiment/sweep.py` and is
+constant everywhere. Twelve cells tested one schedule assumption twelve times.
+
+So the advantage is removed rather than argued about. `scripts/ablate_schedule`
+forces the treatment onto the control's own 24/48/72 and re-runs, leaving the
+choice of channel as the only difference:
+
+| Cohort seed | As shipped | Schedule-matched |
+|---|---|---|
+| 3 | +27.56% | +25.17% |
+| 11 | +30.66% | +26.73% |
+| 29 | +29.58% | +27.19% |
+| 47 | +26.30% | +24.32% |
+
+**About 91% of the lift survives, in all four cohorts, +24.32% to +27.19%.** The
+schedule is worth the remainder — real, and not the source of the result. What
+earns it is refusing to retry a dead card and offering a link to someone who was
+short of money, which is the claim the product actually makes.
+
+**What it costs if this is wrong.** The residual lift rests on conversion
+parameters rather than timing ones, and those the bands do sweep. If they are
+wrong the number moves, which is why they are swept and why the finding is
+reported per cohort rather than as a mean. The narrower claim — that the lift is
+channel choice and holds with the schedule given back — is now executable, and
+`tests/experiment/test_schedule_ablation.py` fails if it stops being true.
+
+### D67. The probability model scores both the plan and its outcome
+
+`plan/llm_planner.py` accepts a proposed plan only if
+`expected_recovery(proposed) >= expected_recovery(fallback)`. `execute/rail.py`
+imports the same module to draw whether a subject actually recovers. The selector
+and the simulator therefore share one probability model, and the deterministic
+ladder in `plan/fallback.py` was itself hand-designed against those half-lives —
+the transient retry moved from 6h to 12h because, measured against this model,
+6h was wrong. Treatment is fit to the data-generating process in a way the
+baseline is not.
+
+Stated plainly because it is the kind of thing a reader should not have to find:
+**the headline is a statement about a model, not a measurement of the world.**
+Nothing here observed a customer paying. What the experiment can honestly say is
+that *given* these declared probabilities, routing by cause beats one fixed
+ladder.
+
+**What it does not invalidate.** The ablation in D66 ran with the LLM planner
+disabled entirely, so the surviving lift owes nothing to a plan the model scored
+for itself, and the schedule tuning is exactly what that run takes away. The
+residue is channel choice under conversion parameters the bands sweep.
+
+**What it costs if this is wrong.** If the timing profiles are badly shaped the
+lift is smaller or absent, and no amount of replication would reveal it, because
+every cohort resamples the same generator. Four seeds through one `CLASS_WEIGHTS`
+dict is a variance check, not independent evidence, and this entry exists so that
+"replicates in 4 of 4" is never read as more than it is.
+
+### D68. The classifier is measured on a reason mix Razorpay does not send
+
+The classification claim is 84.5% to 99.4%, over a cohort drawn from a 25-string
+reason mix. On the live rails that mix does not exist. All eight of Razorpay's
+documented error-scenario cards were paid, each confirmed by `last4`, and every
+one returned the same generic `payment_failed / gateway` — D49 and
+`evidence/error-card-walk.md`.
+
+Measured, the distance is this: **about 15% of the cohort is too vague for the
+lookup table; on Razorpay's own rails it is 100%.** The measurement is roughly
+six times less ambiguous than production.
+
+The two findings this project has been reporting separately are one finding. The
+model's money contribution does not replicate, and the platform discloses no
+cause — the second is why the first happens, because the evidence the model is
+handed on real rails carries nothing to reason from. That is also the honest
+answer to what the AI is worth here: on this cohort it resolves 298 declines the
+table refuses to guess at, and on production traffic as it stands today it would
+be asked to classify everything from one string and should be expected to return
+`UNCLASSIFIED` for most of it.
+
+**What it costs if this is wrong.** Nothing about the deterministic path: a
+generic decline resolves to `UNCLASSIFIED`, whose ladder notifies, retries and
+offers a link rather than retrying a dead card silently —
+`tests/classify/test_ambiguity_gap.py` asserts exactly that, because a confident
+wrong class is the only version of this that would be dangerous. What it costs is
+the headline classification number, which should be read as a ceiling available
+if the cause data ever arrives, not as today's production accuracy.
