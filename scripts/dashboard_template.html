@@ -552,7 +552,7 @@ function runbar(){
     ...(R.xfailed?[['Xfailed',R.xfailed]]:[]),
     ...(R.skipped?[['Skipped',R.skipped]]:[]),
     ['Test time',R.seconds.toFixed(2)+'s'],
-    ['Finished',R.at]
+    ['Started',R.at]
   ];
   bar.innerHTML=cells.map(([k,v])=>'<div class="rb"><span class="rb-k">'+k+
       '</span><span class="rb-v">'+v+'</span></div>').join('')+

@@ -29,6 +29,7 @@ from xml.etree import ElementTree
 EVIDENCE = Path("evidence")
 BANDS = ("low", "mid", "high")
 
+
 def bands_from_sweep(sweep: dict[str, Any]) -> dict[str, Any]:
     """Lift the arm metrics the page charts, and nothing else."""
     out: dict[str, Any] = {}
@@ -204,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Only claim a command when this process actually ran it; a reused junit.xml
     # came from a command we cannot know, and inventing one would be a lie.
-    command, source = str(args.junit), "From"
+    command, source = args.junit.as_posix(), "From"
     if args.run is not None:
         command, source = run_pytest(args.run, args.junit), "Command"
     elif not args.junit.exists():
