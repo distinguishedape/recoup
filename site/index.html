@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Recoup — results, the 681-test suite, and the failure-to-recovery flow, read from the repository's own evidence files.">
+<meta name="color-scheme" content="light">
+<title>Recoup Evidence Desk</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#fafafa; --card:#ffffff; --fg:#18181b; --fg-2:#3f3f46; --muted:#71717a;
+  --border:#e4e4e7; --border-strong:#d4d4d8; --subtle:#f4f4f5;
+  --teal:#0d9488; --indigo:#4338ca; --orange:#c2410c;
+  --teal-soft:#ccfbf1;
+  --good:#15803d; --warn:#b45309; --bad:#b91c1c;
+  --r:8px; --r-sm:6px;
+  --sans:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;margin:0}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-0.02em;font-weight:600}
+p{margin:0}
+code{font-family:var(--mono);font-size:0.92em;background:var(--subtle);padding:1px 5px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+header.top{position:sticky;top:0;z-index:40;background:rgba(250,250,250,.88);
+  backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--border)}
+.top-in{display:flex;align-items:center;gap:16px;height:56px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-0.02em}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.brand small{font-weight:400;color:var(--muted);letter-spacing:0}
+nav.top-nav{margin-left:auto;display:flex;gap:2px}
+nav.top-nav a{padding:6px 10px;border-radius:var(--r-sm);color:var(--muted);text-decoration:none;font-size:13px;font-weight:500}
+nav.top-nav a:hover{background:var(--subtle);color:var(--fg)}
+nav.top-nav a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+section{padding:44px 0 8px;scroll-margin-top:70px}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.sec-head h2{font-size:22px}
+.lede{color:var(--fg-2);max-width:66ch;margin-bottom:20px}
+
+/* ---------- hero ---------- */
+.hero{padding-top:44px}
+.hero h1{font-size:34px;line-height:1.16;max-width:21ch}
+.hero .sub{color:var(--fg-2);max-width:64ch;margin-top:14px;font-size:15px}
+.caveat{margin-top:22px;border:1px solid var(--border);border-left:3px solid var(--warn);
+  background:var(--card);border-radius:var(--r);padding:14px 16px;max-width:74ch}
+.caveat b{color:var(--warn);font-weight:600}
+.caveat p{color:var(--fg-2);font-size:13px}
+
+/* ---------- cards ---------- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px}
+.card h3{font-size:14px}
+.card .cap{color:var(--muted);font-size:12.5px;margin-top:3px;max-width:60ch}
+
+/* ---------- kpi ---------- */
+.bandbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.seg{display:inline-flex;background:var(--subtle);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px;gap:2px}
+.seg button{appearance:none;border:0;background:transparent;font:inherit;font-size:13px;font-weight:500;
+  color:var(--muted);padding:5px 14px;border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(24,24,27,.08)}
+.hint{color:var(--muted);font-size:12.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(198px,1fr));gap:12px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.kpi .k{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font-size:26px;font-weight:600;letter-spacing:-0.025em;margin-top:6px;line-height:1.1}
+.kpi .base{font-size:12.5px;color:var(--muted);margin-top:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 8px;
+  border-radius:999px;margin-top:9px}
+.chip.up{background:#d7f5ec;color:#0f766e}
+.chip.down{background:#e3e6fb;color:var(--indigo)}
+
+/* ---------- charts ---------- */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:12px}
+.chart-wrap{overflow-x:auto}
+svg.chart{display:block;width:100%;height:auto;min-width:320px;margin-top:4px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 2px}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--fg-2)}
+.swatch{width:10px;height:10px;border-radius:3px;flex:none}
+.gridline{stroke:#e4e4e7;stroke-width:1}
+.bar{transition:opacity .12s}
+.chart:hover .bar{opacity:.5}
+.chart .bar:hover{opacity:1}
+.tip{position:fixed;pointer-events:none;z-index:60;background:#18181b;color:#fff;font-size:12px;
+  padding:7px 10px;border-radius:var(--r-sm);opacity:0;transition:opacity .1s;max-width:250px;line-height:1.45}
+.tip b{font-weight:600}
+.tip .t-num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+/* ---------- tests ---------- */
+.tools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input[type=search]{font:inherit;font-size:13px;padding:7px 11px;border:1px solid var(--border-strong);
+  border-radius:var(--r-sm);background:var(--card);color:var(--fg);width:300px;max-width:100%}
+input[type=search]::placeholder{color:var(--muted)}
+.pkglist{display:flex;flex-direction:column;gap:6px}
+details.pkg{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+details.pkg[open]{border-color:var(--border-strong)}
+summary{list-style:none;cursor:pointer;padding:11px 14px;display:grid;
+  grid-template-columns:16px 118px 1fr 76px 46px;align-items:center;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary:hover{background:#fcfcfc}
+.caret{width:16px;height:16px;color:var(--muted);transition:transform .15s;flex:none}
+details[open] .caret{transform:rotate(90deg)}
+.pkgname{font-family:var(--mono);font-size:13px;font-weight:500}
+.meter{height:7px;background:var(--subtle);border-radius:999px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--teal);border-radius:999px}
+.pkgcount{font-size:12.5px;color:var(--fg-2);text-align:right;font-variant-numeric:tabular-nums}
+.pkgfiles{font-size:12px;color:var(--muted);text-align:right}
+.pkgbody{border-top:1px solid var(--border);background:var(--subtle);padding:4px 14px 14px}
+.filegrp{margin-top:12px}
+.filename{font-family:var(--mono);font-size:12px;color:var(--fg-2);font-weight:500;
+  display:flex;align-items:baseline;gap:8px}
+.filename em{font-style:normal;color:var(--muted);font-weight:400}
+ul.tests{list-style:none;margin:7px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+ul.tests li{font-family:var(--mono);font-size:12px;color:var(--fg-2);padding:2px 0 2px 14px;
+  border-left:2px solid var(--border-strong);word-break:break-word}
+ul.tests li mark{background:#fde68a;color:inherit;border-radius:2px}
+.slow{display:grid;grid-template-columns:1fr auto;gap:9px 16px;margin-top:12px;font-size:12.5px}
+.slow code{background:none;padding:0;color:var(--fg-2)}
+.slow .s{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.empty{color:var(--muted);font-size:13px;padding:22px 2px}
+
+/* ---------- flow ---------- */
+.flow{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px 20px 20px;overflow-x:auto}
+.track{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));min-width:840px;position:relative}
+.node{position:relative;text-align:center;padding:0 8px}
+.node .ring{width:44px;height:44px;margin:0 auto;border-radius:50%;border:1.5px solid var(--border-strong);
+  background:var(--card);display:grid;place-items:center;position:relative;z-index:2;
+  transition:border-color .35s,background .35s,box-shadow .35s}
+.node .ring svg{width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;transition:stroke .35s}
+.node .nm{font-size:12.5px;font-weight:600;margin-top:11px}
+.node .dt{font-size:11.5px;color:var(--muted);margin-top:2px;min-height:2.6em}
+.node .step{position:absolute;top:0;left:50%;transform:translateX(26px);font-family:var(--mono);
+  font-size:10px;color:var(--muted);font-weight:600}
+.node::before{content:"";position:absolute;top:22px;left:-50%;width:100%;height:1.5px;background:var(--border);z-index:0}
+.node::after{content:"";position:absolute;top:22px;left:-50%;width:100%;height:1.5px;
+  background:var(--teal);z-index:1;transform:scaleX(0);transform-origin:left;transition:transform .55s ease}
+.node:first-child::before,.node:first-child::after{display:none}
+.node.on .ring{border-color:var(--teal);background:var(--teal-soft);box-shadow:0 0 0 4px rgba(13,148,136,.10)}
+.node.on .ring svg{stroke:#0f766e}
+.node.done .ring{border-color:var(--teal)}
+.node.done::after,.node.on::after{transform:scaleX(1)}
+.node.stop .ring{border-color:var(--bad);background:#fdeaea;box-shadow:0 0 0 4px rgba(185,28,28,.08)}
+.node.stop .ring svg{stroke:var(--bad)}
+.node.stop::after{background:var(--bad)}
+.flow-cap{margin-top:24px;border-top:1px solid var(--border);padding-top:15px;
+  display:flex;gap:12px;align-items:flex-start;min-height:62px}
+.flow-cap .badge{font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;
+  background:var(--subtle);border:1px solid var(--border);color:var(--fg-2);white-space:nowrap;margin-top:1px}
+.flow-cap p{font-size:13.5px;color:var(--fg-2);max-width:72ch}
+.flow-ctl{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.flow-ctl button.plain{appearance:none;font:inherit;font-size:12.5px;font-weight:500;padding:6px 13px;
+  border:1px solid var(--border-strong);background:var(--card);color:var(--fg-2);border-radius:var(--r-sm);cursor:pointer}
+.flow-ctl button.plain:hover{background:var(--subtle)}
+.flow-ctl .caseseg{margin-right:auto}
+footer{border-top:1px solid var(--border);margin-top:56px;padding:24px 0 48px;color:var(--muted);
+  font-size:12.5px;max-width:80ch}
+@media (max-width:640px){
+  .hero h1{font-size:27px}
+  summary{grid-template-columns:16px 1fr 62px;gap:10px}
+  summary .meter,summary .pkgfiles{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+<style>img{max-width:100%}</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand"><span class="dot"></span>Recoup <small>&nbsp;evidence desk</small></div>
+    <nav class="top-nav">
+      <a href="#results">Results</a>
+      <a href="#suite">Test suite</a>
+      <a href="#flow">The flow</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <h1>What a failed auto-debit is worth once you read the reason first.</h1>
+    <p class="sub">Recoup classifies the decline cause, picks the intervention that matches it, and executes inside
+      hard compliance limits. Every figure below is read from <code>evidence/sweep.json</code>,
+      <code>evidence/schedule-ablation.md</code> and <code>pytest --collect-only</code> — not typed in by hand.</p>
+    <div class="caveat">
+      <p><b>Read this as a model, not a bank statement.</b> The pipeline is real — Razorpay signs the webhook and
+      the payment links are live. Whether a contacted customer <em>pays</em> is simulated, because Razorpay's sandbox
+      returns one indistinguishable error for all eight of its documented decline scenarios. The action selector and
+      the outcome simulator also share one probability model, so the lift is a statement about that model rather
+      than a measurement of the world. Both limits are disclosed in the decision log rather than fixed.</p>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="sec-head"><span class="eyebrow">01 · Results</span><h2>Baseline ladder vs. Recoup</h2></div>
+    <p class="lede">The baseline runs one fixed ladder for every cause: notify, then retry at 24, 48 and 72 hours.
+      Recoup branches on the cause first. Bands move retry success and conversion for both arms; the finding
+      holds in all three.</p>
+
+    <div class="bandbar">
+      <div class="seg" role="group" aria-label="Difficulty band">
+        <button data-band="low" aria-pressed="false">Low</button>
+        <button data-band="mid" aria-pressed="true">Mid</button>
+        <button data-band="high" aria-pressed="false">High</button>
+      </div>
+      <span class="hint">2,000 failed charges per arm · 1,909 involuntary · cohort seed 3</span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Recovery rate, every band</h3>
+        <p class="cap">Share of involuntary failures recovered. The gap widens as the band gets easier and never closes.</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:#4338ca"></i>Baseline ladder</span>
+          <span><i class="swatch" style="background:#0d9488"></i>Recoup</span>
+        </div>
+        <div class="chart-wrap"><svg class="chart" id="c-rate" viewBox="0 0 520 250" role="img"
+          aria-label="Grouped bars of recovery rate by band: Low 35.9 versus 44.8 percent, Mid 46.0 versus 58.7, High 54.2 versus 71.4."></svg></div>
+      </div>
+
+      <div class="card">
+        <h3>Where the money comes back from</h3>
+        <p class="cap">Gross recovered, split by the mechanism that recovered it. Two of the three are channels a
+          retry ladder has no way to offer.</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:#4338ca"></i>Retry</span>
+          <span><i class="swatch" style="background:#0d9488"></i>Card-update request</span>
+          <span><i class="swatch" style="background:#c2410c"></i>Pay-now link</span>
+        </div>
+        <div class="chart-wrap"><svg class="chart" id="c-mech" viewBox="0 0 520 250" role="img"
+          aria-label="Stacked bars comparing gross recovered by mechanism for the baseline ladder and Recoup."></svg></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>The schedule ablation</h3>
+        <p class="cap">The arms retried on different ladders and the sweep never varied that. So it was taken away
+          rather than argued about: Recoup forced onto the baseline's own 24/48/72h, leaving channel choice as the
+          only remaining difference. <b>About 91% of the lift survives</b>, in all four cohorts.</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:#0d9488"></i>As shipped · 24/72/120h</span>
+          <span><i class="swatch" style="background:#c2410c"></i>Schedule-matched · 24/48/72h</span>
+        </div>
+        <div class="chart-wrap"><svg class="chart" id="c-abl" viewBox="0 0 520 232" role="img"
+          aria-label="Net lift per cohort seed, as shipped versus schedule-matched. All four schedule-matched cohorts stay between plus 24.3 and plus 27.2 percent."></svg></div>
+      </div>
+
+      <div class="card">
+        <h3>Attempts spent per recovery</h3>
+        <p class="cap">The baseline pays for retries against dead cards and revoked mandates. Recoup refuses them,
+          which is where the cost falls — not only where the money rises.</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:#4338ca"></i>Baseline ladder</span>
+          <span><i class="swatch" style="background:#0d9488"></i>Recoup</span>
+        </div>
+        <div class="chart-wrap"><svg class="chart" id="c-eff" viewBox="0 0 520 250" role="img"
+          aria-label="Grouped bars of charge attempts per recovery by band, lower is better."></svg></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suite">
+    <div class="sec-head"><span class="eyebrow">02 · Test suite</span><h2>681 tests, and what each one holds down</h2></div>
+    <p class="lede">Open a package to see its files and every test name it collects. The names are the specification —
+      they read as sentences on purpose. <code>python -m pytest -q</code> · 680 pass, 1 xfail, about 120 seconds.</p>
+
+    <div class="tools">
+      <input type="search" id="q" placeholder="Filter tests — try &quot;mandate&quot; or &quot;signature&quot;" aria-label="Filter tests by name">
+      <span class="hint" id="qcount"></span>
+    </div>
+
+    <div class="pkglist" id="pkglist"></div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Slowest tests in the suite</h3>
+      <p class="cap">The four that dominate the run. All four are whole-cohort simulations rather than unit tests.</p>
+      <div class="slow">
+        <code>test_the_efficiency_findings_replicate_on_real_cohorts</code><span class="s">27.91s</span>
+        <code>test_the_sweep_produces_findings</code><span class="s">8.87s</span>
+        <code>test_the_report_leads_with_money</code><span class="s">8.48s</span>
+        <code>test_lift_survives_the_control_s_own_retry_schedule</code><span class="s">6.09s</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <div class="sec-head"><span class="eyebrow">03 · The flow</span><h2>From a declined charge to the money back</h2></div>
+    <p class="lede">One failure, six stages, each of them a package in the repo — and each of them able to refuse.
+      Switch the decline reason to watch the ladder change. That branch is the whole product.</p>
+
+    <div class="flow">
+      <div class="track" id="track"></div>
+      <div class="flow-cap"><span class="badge" id="fbadge">·</span><p id="fcap">·</p></div>
+    </div>
+    <div class="flow-ctl">
+      <div class="seg caseseg" role="group" aria-label="Decline reason">
+        <button data-case="0" aria-pressed="true">Insufficient funds</button>
+        <button data-case="1" aria-pressed="false">Card expired</button>
+        <button data-case="2" aria-pressed="false">Mandate revoked</button>
+      </div>
+      <button class="plain" id="replay">Replay</button>
+    </div>
+  </section>
+
+  <footer>
+    Built for the Razorpay AI Buildathon, Track 03 — AI Revenue Recovery. Figures read from
+    <code>evidence/sweep.json</code>, <code>evidence/schedule-ablation.md</code> and
+    <code>pytest --collect-only</code> at commit <code>d31df7a</code>. Drawn with hand-written SVG and CSS in
+    shadcn's design language — its zinc neutrals, radius and border tokens, Inter — rather than the shadcn
+    library itself, which ships as React source rather than as a bundle.
+  </footer>
+</main>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script id="testdata" type="application/json">[{"pkg":"audit","files":[{"file":"test_log.py","tests":["test_new_record_stamps_identity_and_real_time","test_appended_records_come_back","test_reconstruct_returns_one_subjects_story_in_virtual_time_order","test_records_at_the_same_virtual_time_reconstruct_in_append_order","test_the_log_survives_being_reopened","test_the_jsonl_mirror_is_written_line_per_record","test_the_table_has_no_update_or_delete_path","test_export_csv_writes_one_row_per_record","test_export_json_round_trips","test_sqlite_actually_holds_the_rows"]}]},{"pkg":"classify","files":[{"file":"test_accuracy.py","tests":["test_the_table_alone_is_right_about_five_times_in_six","test_the_table_alone_never_resolves_an_ambiguous_reason","test_the_model_resolves_almost_all_of_what_the_table_refuses","test_the_model_earns_its_place_in_the_pipeline","test_the_residual_error_is_the_generators_doing_not_the_classifiers"]},{"file":"test_ambiguity_gap.py","tests":["test_the_table_cannot_resolve_the_only_string_razorpay_sends","test_a_generic_decline_with_no_model_is_unclassified_not_guessed","test_the_measured_distribution_is_far_less_ambiguous_than_production"]},{"file":"test_engine.py","tests":["test_an_unambiguous_reason_never_reaches_the_model","test_an_ambiguous_reason_is_escalated_to_the_model","test_with_no_client_at_all_an_ambiguous_reason_still_gets_a_class","test_classify_always_returns_a_classification_for_every_reason"]},{"file":"test_llm_resolver.py","tests":["test_the_prompt_carries_the_signals_the_model_needs","test_the_system_prompt_lists_the_allowed_classes","test_a_well_formed_answer_is_accepted","test_json_wrapped_in_prose_or_fences_is_still_read","test_an_invented_class_falls_back_instead_of_being_trusted","test_unparseable_output_falls_back","test_an_out_of_range_confidence_is_clamped_not_rejected","test_an_unreachable_model_falls_back_rather_than_raising","test_a_truncated_response_falls_back_rather_than_half_parsing","test_the_token_budget_leaves_room_for_a_model_that_reasons_first"]},{"file":"test_taxonomy.py","tests":["test_every_spec_reason_string_maps_to_its_spec_class[insufficient_funds-INSUFFICIENT_FUNDS]","test_every_spec_reason_string_maps_to_its_spec_class[card_expired-INSTRUMENT_INVALID]","test_every_spec_reason_string_maps_to_its_spec_class[card_not_enrolled-INSTRUMENT_INVALID]","test_every_spec_reason_string_maps_to_its_spec_class[card_disabled_for_online_payments-INSTRUMENT_INVALID]","test_every_spec_reason_string_maps_to_its_spec_class[debit_instrument_inactive-INSTRUMENT_INVALID]","test_every_spec_reason_string_maps_to_its_spec_class[debit_instrument_blocked-INSTRUMENT_INVALID]","test_every_spec_reason_string_maps_to_its_spec_class[subscription_cancelled-MANDATE_REVOKED]","test_every_spec_reason_string_maps_to_its_spec_class[bank_technical_error-TRANSIENT_ISSUER]","test_every_spec_reason_string_maps_to_its_spec_class[gateway_technical_error-TRANSIENT_ISSUER]","test_every_spec_reason_string_maps_to_its_spec_class[payment_risk_check_failed-RISK_DECLINE]","test_every_spec_reason_string_maps_to_its_spec_class[authentication_failed-UNCLASSIFIED]","test_every_spec_reason_string_maps_to_its_spec_class[incorrect_cvv-UNCLASSIFIED]","test_every_spec_reason_string_maps_to_its_spec_class[transaction_limit_exceeded-UNCLASSIFIED]","test_every_spec_reason_string_maps_to_its_spec_class[payment_timed_out-UNCLASSIFIED]","test_every_spec_reason_string_maps_to_its_spec_class[payment_cancelled-UNCLASSIFIED]","test_the_ambiguous_reasons_are_deferred_to_the_llm","test_the_model_is_asked_about_only_a_handful_of_reasons","test_an_unmapped_reason_is_unclassified_not_a_crash","test_an_unmapped_reason_is_less_confident_than_a_table_hit","test_reason_strings_are_matched_case_and_whitespace_insensitively","test_the_rationale_names_the_reason_string_that_drove_the_decision","test_the_table_never_maps_anything_to_a_class_outside_the_enum","test_reasons_from_razorpays_published_list_are_classified[issuer_technical_error-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[bank_not_available-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[bank_cutoff_in_progress-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[payment_declined_due_to_high_traffic-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[server_error-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[capture_failed-TRANSIENT_ISSUER]","test_reasons_from_razorpays_published_list_are_classified[card_type_invalid-INSTRUMENT_INVALID]","test_reasons_from_razorpays_published_list_are_classified[card_number_invalid-INSTRUMENT_INVALID]","test_reasons_from_razorpays_published_list_are_classified[compliance_violation-RISK_DECLINE]","test_reasons_from_razorpays_published_list_are_classified[funds_blocked_by_mandate-INSUFFICIENT_FUNDS]","test_reasons_from_razorpays_published_list_are_classified[transaction_daily_limit_exceeded-UNCLASSIFIED]","test_reasons_from_razorpays_published_list_are_classified[transaction_daily_count_exceeded-UNCLASSIFIED]","test_reasons_from_razorpays_published_list_are_classified[otp_attempts_exceeded-UNCLASSIFIED]","test_razorpays_other_undisclosed_declines_go_to_the_model[payment_declined]","test_razorpays_other_undisclosed_declines_go_to_the_model[debit_declined]","test_the_issuer_outage_family_is_covered_not_just_the_two_it_started_with","test_every_mapped_reason_is_lowercase_snake_case_as_razorpay_sends_them"]}]},{"pkg":"clock","files":[{"file":"test_virtual.py","tests":["test_clock_starts_at_the_given_time","test_pop_returns_events_in_time_order_regardless_of_insertion_order","test_pop_advances_now_to_the_event_time","test_ties_break_by_insertion_order_not_by_heap_accident","test_payloads_that_cannot_be_compared_do_not_break_the_heap","test_pop_on_an_empty_clock_returns_none_and_leaves_now_alone","test_scheduling_in_the_past_is_clamped_to_now","test_len_reports_pending_events"]}]},{"pkg":"detect","files":[{"file":"test_scanner.py","tests":["test_an_abandoned_checkout_with_no_attempt_is_found_but_not_classified","test_an_attempted_checkout_becomes_a_classifiable_failure","test_a_fresh_checkout_is_left_alone","test_a_paid_order_is_not_at_risk","test_overdue_invoices_are_found_and_unpaid_balance_is_what_is_at_risk","test_a_paid_or_not_yet_due_invoice_is_not_at_risk","test_a_halted_subscription_is_found_without_a_webhook","test_one_pass_covers_all_three_surfaces_named_in_the_brief","test_the_total_at_risk_is_reported","test_nothing_in_the_read_client_can_write","test_a_paid_link_is_reported_as_a_recovery","test_an_unpaid_link_is_not_a_recovery","test_reconciliation_only_reads"]}]},{"pkg":"escalate","files":[{"file":"test_ladder.py","tests":["test_tier_one_is_always_enterable","test_a_tier_may_not_be_skipped","test_a_tier_opens_once_the_previous_tier_has_actually_been_executed","test_a_planned_but_blocked_tier_does_not_open_the_next_one","test_a_recovered_subject_may_not_escalate_further","test_terminal_tier_is_always_reachable","test_a_revoked_mandate_goes_straight_to_terminal","test_an_opted_out_customer_goes_straight_to_terminal","test_executing_a_contact_spends_the_contact_budget","test_executing_a_charge_spends_the_charge_budget_whether_or_not_it_worked","test_a_successful_charge_marks_the_subject_recovered","test_a_successful_message_does_not_mark_the_subject_recovered","test_a_successful_pay_now_link_marks_the_subject_recovered_and_spends_a_contact","test_an_unpaid_pay_now_link_spends_a_contact_without_recovering","test_an_escalation_action_flags_manual_review","test_a_subject_with_both_budgets_spent_is_exhausted","test_a_subject_with_budget_remaining_is_not_exhausted","test_a_subject_whose_final_notice_failed_is_exhausted","test_a_zero_budget_class_is_exhausted_from_the_start","test_terminal_states_reflect_what_actually_happened","test_recovery_beats_every_other_terminal_state","test_every_tier_declares_its_channels","test_the_planner_chosen_starting_tier_is_enterable_without_lower_tiers_running","test_advancement_beyond_the_starting_tier_is_still_earned_by_execution","test_a_starting_tier_does_not_open_tiers_above_it","test_the_ladder_governs_contact_and_nothing_else"]}]},{"pkg":"execute","files":[{"file":"test_executor.py","tests":["test_render_context_exposes_rupees_not_paise","test_the_executor_refuses_a_raw_unauthorized_action","test_a_charge_goes_to_the_rail_and_costs_the_charge_fee","test_a_failed_charge_records_the_decline_reason","test_a_message_is_rendered_and_dispatched","test_a_message_costs_its_channel_rate","test_an_sms_costs_more_than_an_email","test_an_instrument_update_request_asks_the_rail_whether_it_converted","test_stopping_costs_nothing_and_always_succeeds","test_escalating_to_a_human_costs_nothing_and_always_succeeds","test_every_execution_writes_an_audit_record_naming_the_rule_that_allowed_it","test_the_audit_record_carries_the_virtual_time_not_the_wall_clock","test_cost_of_agrees_with_what_execution_actually_charges","test_a_pay_now_link_is_sent_and_its_outcome_recorded","test_a_pay_now_link_that_is_not_paid_is_not_a_failure_to_send","test_an_undeliverable_pay_now_link_never_counts_as_paid","test_an_action_with_no_link_available_is_not_reported_as_sent"]},{"file":"test_messages.py","tests":["test_the_allowlist_is_exactly_the_defined_templates","test_the_templates_the_planners_reference_all_exist","test_each_template_declares_the_tier_and_channel_it_belongs_to","test_rendering_substitutes_the_context","test_rendering_an_unknown_template_is_refused","test_a_missing_context_value_is_a_loud_error_not_a_literal_brace","test_sms_templates_are_short_enough_to_actually_send","test_no_template_promises_anything_about_a_customers_account_status","test_pay_now_templates_are_on_the_allowlist","test_pay_now_templates_carry_the_link_placeholder","test_pay_now_templates_are_tier_two_because_they_ask_for_action","test_each_template_declares_the_action_type_it_may_be_used_with"]},{"file":"test_probabilities.py","tests":["test_every_band_scores_every_failure_class","test_spec_mid_band_values_are_reproduced_exactly","test_bands_are_ordered_low_below_mid_below_high","test_mandate_revoked_is_hopeless_in_every_band","test_update_conversion_matches_the_spec_bands","test_later_retries_are_worth_less_than_the_first","test_decay_cannot_push_a_probability_below_zero","test_a_hopeless_class_stays_hopeless_under_decay","test_a_negative_attempt_index_is_rejected","test_a_fresh_instrument_is_very_likely_to_charge","test_waiting_helps_a_funds_shortfall","test_an_issuer_outage_recovers_within_hours_not_days","test_waiting_does_not_repair_a_dead_card_or_a_revoked_mandate","test_a_revoked_mandate_stays_hopeless_however_long_you_wait","test_omitting_the_clock_keeps_the_old_attempt_only_behaviour","test_decay_still_applies_on_top_of_timing","test_probability_never_exceeds_certainty","test_a_negative_elapsed_time_is_rejected","test_every_class_declares_a_timing_profile","test_pay_now_conversion_is_defined_at_every_band","test_pay_now_converts_worse_than_a_card_update","test_the_pay_now_bands_are_ordered"]},{"file":"test_rail.py","tests":["test_canonical_decline_gives_a_real_razorpay_reason_string_per_class","test_a_mandate_revoked_subject_can_never_be_charged","test_a_failed_charge_reports_the_subjects_decline_reason","test_a_successful_charge_carries_no_error","test_charging_increments_the_subjects_attempt_counter","test_the_same_seed_produces_the_same_outcomes","test_different_seeds_produce_different_outcomes","test_the_high_band_recovers_more_often_than_the_low_band","test_an_update_request_sometimes_converts_and_flips_the_flag","test_an_updated_instrument_charges_successfully_almost_always","test_an_unknown_subscription_is_a_loud_error_not_a_silent_decline","test_a_pay_now_link_sometimes_converts_and_sometimes_does_not","test_a_converted_pay_now_subject_stays_converted","test_a_simulated_pay_now_link_can_never_be_mistaken_for_a_real_one","test_the_pay_now_draw_does_not_consume_the_charge_stream"]},{"file":"test_rail_conformance.py","tests":["test_the_protocol_actually_declares_the_methods_this_test_checks","test_every_rail_implements_every_protocol_method[SimulatedRail]","test_every_rail_implements_every_protocol_method[RazorpayTestRail]","test_every_rail_implements_every_protocol_method[FakeRail]","test_every_rail_implements_every_protocol_method[RefusingRail]","test_every_rail_implements_every_protocol_method[ConfigurablePayNowRail]","test_every_rail_implements_every_protocol_method[_StubRail]","test_every_rail_takes_the_arguments_the_protocol_promises[SimulatedRail]","test_every_rail_takes_the_arguments_the_protocol_promises[RazorpayTestRail]","test_every_rail_takes_the_arguments_the_protocol_promises[FakeRail]","test_every_rail_takes_the_arguments_the_protocol_promises[RefusingRail]","test_every_rail_takes_the_arguments_the_protocol_promises[ConfigurablePayNowRail]","test_every_rail_takes_the_arguments_the_protocol_promises[_StubRail]"]},{"file":"test_rail_paired.py","tests":["test_a_subject_stream_is_reproducible","test_different_subjects_get_different_streams","test_different_seeds_give_a_subject_different_streams","test_paired_mode_gives_a_subject_the_same_draws_regardless_of_cohort_order","test_paired_mode_is_unaffected_by_what_other_subjects_did_first","test_unpaired_mode_is_order_sensitive_which_is_why_paired_mode_exists","test_paired_mode_still_respects_the_band","test_paired_mode_still_cannot_recover_a_revoked_mandate","test_a_conversion_roll_does_not_steal_the_next_charge_draw","test_charge_and_conversion_streams_are_independent","test_an_arm_that_asks_for_an_instrument_update_still_charges_the_same_luck"]},{"file":"test_razorpay_rail.py","tests":["test_charging_is_refused_with_an_explanation_not_a_fabricated_result","test_the_rail_still_satisfies_the_payment_rail_protocol","test_fetching_a_subscription_returns_the_entity","test_the_subscription_state_is_read_from_the_api","test_a_subscription_the_api_does_not_know_reports_unknown","test_the_card_change_link_carries_the_card_change_parameter","test_a_subscription_with_no_short_url_yields_an_empty_link","test_delivering_an_update_request_reports_whether_a_link_exists","test_an_api_error_is_reported_as_unknown_rather_than_crashing_the_batch","test_the_rail_refuses_to_be_built_on_a_live_config"]}]},{"pkg":"experiment","files":[{"file":"test_control.py","tests":["test_the_baseline_ladder_is_three_retries_a_day_apart","test_every_subject_gets_an_outcome","test_no_subject_is_charged_more_than_the_baseline_allows","test_an_unrecovered_subject_is_charged_the_full_ladder","test_the_control_arm_never_contacts_anyone","test_the_control_arm_wastes_money_on_dead_instruments","test_a_revoked_mandate_is_still_booked_as_voluntary_churn","test_the_control_arm_reaches_only_three_terminal_states","test_a_recovered_subject_stops_being_charged","test_a_recovered_subject_records_when_it_recovered","test_a_recovered_subject_is_attributed_to_retry","test_every_subject_records_its_own_first_failure","test_gross_recovery_only_counts_recovered_subjects","test_the_same_seed_reproduces_the_control_arm","test_every_charge_attempt_is_audited"]},{"file":"test_harness.py","tests":["test_both_arms_run_over_the_same_cohort_size","test_both_arms_see_the_same_voluntary_churn","test_the_arms_write_separate_audit_databases","test_the_comparison_is_computed_from_both_arms","test_recoup_wastes_fewer_attempts_than_the_baseline","test_the_experiment_is_reproducible","test_freezing_writes_the_configuration_hash","test_verifying_an_unchanged_configuration_passes","test_verifying_a_changed_configuration_is_refused","test_verifying_against_a_missing_freeze_file_is_refused","test_the_freeze_file_records_what_was_frozen_for_a_human_to_read"]},{"file":"test_measurement_inputs.py","tests":["test_the_planner_prompt_is_part_of_the_measurement","test_the_classifier_prompt_is_part_of_the_measurement","test_the_shape_of_a_user_prompt_is_part_of_the_measurement","test_the_model_name_is_part_of_the_measurement","test_every_constant_that_moves_money_is_covered[probabilities]","test_every_constant_that_moves_money_is_covered[budgets]","test_every_constant_that_moves_money_is_covered[costs]","test_every_constant_that_moves_money_is_covered[cohort]","test_every_constant_that_moves_money_is_covered[schedule]","test_the_hash_is_stable_across_calls","test_what_changed_names_the_section_that_moved","test_what_changed_is_empty_when_nothing_moved","test_freezing_records_the_inputs_not_only_their_hash","test_verifying_refuses_a_changed_prompt_and_says_which_one","test_verifying_passes_when_the_inputs_are_untouched","test_an_old_frozen_file_without_inputs_is_not_treated_as_agreement"]},{"file":"test_replication.py","tests":["test_a_finding_that_survives_everywhere_replicates","test_a_finding_that_survives_in_most_cohorts_does_not_replicate","test_a_finding_that_survives_nowhere_says_so_plainly","test_the_per_seed_values_are_kept_so_the_spread_is_visible","test_which_cohorts_it_survived_in_is_recorded","test_no_cohorts_yields_no_findings","test_running_a_replication_sweeps_every_seed","test_each_cohort_gets_its_own_seed_not_the_configs","test_the_efficiency_findings_replicate_on_real_cohorts"]},{"file":"test_schedule_ablation.py","tests":["test_lift_survives_the_control_s_own_retry_schedule"]},{"file":"test_sweep.py","tests":["test_a_lift_positive_at_every_band_survives","test_a_lift_that_appears_only_at_the_high_band_does_not_survive","test_a_lift_that_fails_at_the_low_band_does_not_survive","test_a_metric_where_lower_is_better_survives_when_it_falls_everywhere","test_every_headline_metric_gets_a_finding","test_every_finding_carries_its_unit","test_the_sweep_runs_the_experiment_once_per_band","test_each_band_writes_its_own_audit_directory","test_the_sweep_produces_findings","test_the_sweep_is_reproducible","test_the_bands_in_the_results_override_the_configs_own_band"]}]},{"pkg":"ingest","files":[{"file":"test_cohort.py","tests":["test_the_cohort_is_the_requested_size","test_the_class_weights_sum_to_one","test_the_same_seed_reproduces_the_identical_cohort","test_a_different_seed_produces_a_different_cohort","test_every_event_is_marked_as_coming_from_the_cohort_generator","test_every_subject_has_a_matching_subscription_and_event","test_a_large_cohort_contains_every_failure_class","test_an_unambiguous_reason_string_still_identifies_its_cause","test_a_cause_produces_more_than_one_reason_string","test_the_cohort_produces_genuinely_ambiguous_declines","test_the_table_alone_can_no_longer_be_perfect","test_source_and_step_are_a_second_signal_not_a_constant","test_plan_amounts_are_drawn_from_the_declared_distribution","test_first_failures_are_spread_over_time_not_all_at_one_instant","test_no_first_failure_predates_the_run_start"]},{"file":"test_payment_failed_mapper.py","tests":["test_both_event_types_are_registered","test_the_error_triple_is_carried_through_verbatim","test_the_order_stands_in_as_the_subject","test_a_payment_with_no_order_still_gets_a_stable_subject","test_the_payment_id_identifies_the_event_for_deduplication","test_it_is_marked_as_coming_from_the_webhook","test_the_event_time_uses_the_payloads_created_at","test_a_payload_with_no_created_at_falls_back_to_receipt_time","test_a_missing_error_reason_falls_back_rather_than_raising","test_an_empty_payload_does_not_raise","test_the_classifier_reads_it_exactly_as_it_reads_a_subscription_failure","test_both_mappers_produce_the_identical_shape"]},{"file":"test_signature.py","tests":["test_the_signature_is_hmac_sha256_hex_over_the_raw_body","test_a_correct_signature_verifies","test_a_tampered_body_does_not_verify","test_a_signature_from_the_wrong_secret_does_not_verify","test_a_missing_signature_does_not_verify","test_an_empty_signature_does_not_verify","test_a_malformed_signature_does_not_verify_and_does_not_raise","test_signature_comparison_is_case_insensitive_on_the_hex","test_reordering_json_keys_changes_the_signature","test_the_header_name_is_the_one_razorpay_sends"]},{"file":"test_webhook_app.py","tests":["test_a_correctly_signed_event_is_accepted","test_an_accepted_event_reaches_the_sink_as_a_failure_event","test_an_accepted_event_is_audited","test_a_bad_signature_is_rejected","test_a_signature_from_the_wrong_secret_is_rejected","test_a_missing_signature_header_is_rejected","test_a_rejected_event_is_audited_and_never_processed","test_a_body_that_is_not_json_is_rejected","test_an_event_type_we_do_not_handle_is_ignored_with_a_two_hundred","test_a_replayed_event_is_processed_only_once","test_a_replayed_event_is_still_refused_by_a_restarted_receiver","test_the_signature_is_checked_against_the_bytes_razorpay_sent","test_a_sink_that_raises_does_not_lose_the_audit_record","test_the_health_endpoint_reports_the_key_id_but_no_secret"]},{"file":"test_webhook_mapper.py","tests":["test_the_identifiers_come_from_the_payload","test_the_error_triple_is_carried_through_verbatim","test_the_event_is_marked_as_coming_from_the_webhook","test_the_attempt_number_follows_the_paid_count","test_the_event_time_uses_the_payloads_created_at_when_present","test_a_payload_with_no_created_at_falls_back_to_the_receipt_time","test_a_cancelled_subscription_becomes_the_mandate_revoked_reason","test_the_subscription_state_beats_the_payment_error","test_a_payload_with_no_payment_entity_still_produces_an_event","test_a_payload_with_no_error_reason_falls_back_rather_than_raising","test_missing_source_and_step_become_unknown_not_empty","test_a_payload_with_no_invoice_id_uses_a_derived_placeholder","test_an_unmapped_reason_still_classifies_without_error","test_a_mapped_webhook_event_is_indistinguishable_from_a_cohort_event_downstream"]}]},{"pkg":"live","files":[{"file":"test_agent.py","tests":["test_a_real_event_gets_classified_and_planned_not_just_logged","test_the_agent_acts_and_does_not_stop_at_planning","test_a_rail_that_cannot_charge_is_recorded_not_faked","test_a_contact_at_three_in_the_morning_is_rescheduled_not_dropped","test_future_actions_are_held_rather_than_executed_early","test_a_message_with_no_transport_is_not_recorded_as_delivered","test_a_revoked_mandate_is_never_charged"]}]},{"pkg":"llm","files":[{"file":"test_client.py","tests":["test_the_default_model_is_the_one_the_spec_pins","test_a_completion_reaches_the_transport","test_an_identical_prompt_is_served_from_cache_without_calling_out","test_the_cache_survives_a_new_client_on_the_same_file","test_a_different_prompt_is_a_different_cache_entry","test_the_cache_key_covers_model_system_user_and_max_tokens","test_a_transport_failure_becomes_llm_unavailable","test_a_failed_call_is_not_cached","test_no_api_key_and_no_transport_means_unavailable_not_a_crash","test_a_pinned_model_name_survives_having_no_provider_key"]},{"file":"test_providers.py","tests":["test_a_named_provider_wins_over_detection","test_an_unknown_named_provider_is_refused","test_detection_falls_back_to_whichever_key_is_present","test_no_keys_at_all_detects_nothing","test_free_tiers_are_preferred_when_several_keys_are_present","test_every_provider_declares_a_key_variable_and_a_default_model","test_building_a_transport_without_its_key_is_refused","test_a_real_user_agent_is_sent_because_wafs_reject_the_default","test_groq_sends_the_openai_chat_shape_to_the_groq_endpoint","test_xai_uses_the_same_shape_against_its_own_endpoint","test_a_custom_base_url_overrides_the_preset","test_an_openai_compatible_provider_with_no_base_url_is_refused","test_gemini_sends_its_own_shape_and_carries_the_key_in_the_url","test_anthropic_sends_its_own_shape_with_a_version_header","test_an_empty_reply_is_an_error_rather_than_an_empty_string","test_a_gemini_reply_with_no_candidates_is_an_error","test_the_model_defaults_per_provider_and_is_overridable","test_the_client_picks_up_a_provider_from_the_environment","test_the_client_still_prefers_an_injected_transport_over_any_key","test_the_client_with_no_key_at_all_reports_what_to_set","test_switching_provider_changes_the_cache_key"]}]},{"pkg":"models","files":[{"file":"test_core.py","tests":["test_subscription_holds_money_as_integer_paise","test_subscription_rejects_negative_money","test_failure_event_records_which_ingestion_source_produced_it","test_failure_event_rejects_an_unknown_source","test_classification_confidence_is_bounded","test_action_carries_its_escalation_tier","test_models_are_frozen_so_a_stage_cannot_mutate_another_stages_data","test_intervention_plan_groups_actions_for_one_subscription","test_execution_result_costs_are_integer_paise"]},{"file":"test_enums.py","tests":["test_failure_classes_are_exactly_the_six_spec_classes","test_tiers_are_ordered_and_comparable","test_terminal_states_are_the_four_spec_states","test_action_types_cover_every_thing_the_pipeline_can_do","test_bands_are_low_mid_high"]}]},{"pkg":"orchestrate","files":[{"file":"test_runner.py","tests":["test_a_cohort_of_ten_runs_end_to_end","test_every_subject_reaches_exactly_one_terminal_state","test_a_revoked_mandate_is_counted_as_voluntary_churn_not_a_recovery_failure","test_a_revoked_mandate_is_never_charged_or_contacted","test_a_risk_decline_reaches_a_human_rather_than_dying_silently","test_an_invalid_instrument_is_never_retried_on_the_dead_card","test_recovered_subjects_bring_in_their_full_plan_amount","test_gross_recovery_is_the_sum_of_the_subject_amounts","test_cost_is_charged_for_unrecovered_subjects_too","test_net_recovery_is_gross_minus_every_rupee_spent","test_the_same_seed_and_band_reproduce_the_same_result","test_the_high_band_recovers_more_money_than_the_low_band","test_the_config_hash_changes_when_the_configuration_changes","test_every_subject_has_an_ingest_a_classify_and_a_plan_record","test_every_execution_in_the_audit_log_names_the_verdict_that_allowed_it","test_blocked_actions_are_audited_with_the_rule_that_blocked_them","test_the_run_terminates_and_does_not_loop_forever","test_an_opted_out_subject_is_never_messaged_and_the_denial_is_audited","test_a_live_promise_to_pay_suppresses_action_and_names_the_rule","test_a_failing_policy_rule_halts_the_batch_rather_than_proceeding_ungated","test_a_dead_card_actually_gets_asked_to_supply_a_new_one","test_some_dead_card_subjects_recover_once_they_supply_a_new_instrument","test_a_recovery_records_which_mechanism_earned_it","test_instrument_update_recoveries_are_distinguished_from_plain_retries","test_a_paid_pay_now_link_reaches_recovered_via_end_to_end","test_a_subject_never_recovered_carries_no_recovery_mechanism","test_a_blocked_notification_does_not_also_kill_the_retries_behind_it","test_a_contact_blocked_by_the_window_is_rescheduled_not_discarded","test_a_rescheduled_contact_gets_a_real_second_chance","test_rescheduling_is_bounded","test_only_a_timing_denial_earns_a_reschedule","test_a_rescheduled_contact_still_passes_every_other_rule"]}]},{"pkg":"plan","files":[{"file":"test_budgets.py","tests":["test_budgets_match_the_spec_table[INSUFFICIENT_FUNDS-3-2]","test_budgets_match_the_spec_table[INSTRUMENT_INVALID-0-2]","test_budgets_match_the_spec_table[MANDATE_REVOKED-0-0]","test_budgets_match_the_spec_table[TRANSIENT_ISSUER-3-0]","test_budgets_match_the_spec_table[RISK_DECLINE-0-0]","test_budgets_match_the_spec_table[UNCLASSIFIED-3-2]","test_every_class_has_a_budget","test_action_ids_are_deterministic_and_unique_per_index","test_clamping_drops_charge_retries_beyond_the_budget","test_clamping_drops_contacts_beyond_the_budget","test_an_instrument_update_request_counts_as_a_contact","test_clamping_keeps_the_earliest_actions_and_preserves_order","test_stop_and_escalate_are_never_clamped_away","test_a_zero_budget_class_loses_every_charge_and_contact","test_a_pay_now_link_counts_as_a_customer_contact"]},{"file":"test_fallback.py","tests":["test_every_class_gets_a_plan_that_respects_its_budget[INSUFFICIENT_FUNDS]","test_every_class_gets_a_plan_that_respects_its_budget[INSTRUMENT_INVALID]","test_every_class_gets_a_plan_that_respects_its_budget[MANDATE_REVOKED]","test_every_class_gets_a_plan_that_respects_its_budget[TRANSIENT_ISSUER]","test_every_class_gets_a_plan_that_respects_its_budget[RISK_DECLINE]","test_every_class_gets_a_plan_that_respects_its_budget[UNCLASSIFIED]","test_insufficient_funds_notifies_then_chases_the_pay_cycle","test_retries_are_spaced_out_in_time_not_stacked_on_the_same_instant","test_instrument_invalid_asks_for_an_update_and_never_retries_the_dead_card","test_instrument_invalid_escalates_from_tier_two_to_tier_three","test_mandate_revoked_stops_immediately_and_contacts_nobody","test_transient_issuer_retries_sooner_than_the_baseline_and_stays_silent","test_risk_decline_goes_to_a_human_rather_than_being_retried","test_unclassified_gets_three_retries","test_every_message_action_names_a_template_and_a_channel","test_every_action_carries_a_human_readable_reason","test_the_plan_is_deterministic","test_a_shortfall_plan_offers_a_pay_now_link_after_the_first_retry","test_an_unclear_cause_offers_a_link_with_its_own_wording","test_no_other_cause_plans_a_pay_now_link","test_the_link_respects_the_contact_budget"]},{"file":"test_llm_planner.py","tests":["test_the_system_prompt_states_the_budget_and_the_allowlist","test_the_system_prompt_allows_pay_now_link_and_states_its_restriction","test_a_pay_now_link_proposal_without_a_template_is_rejected","test_a_well_formed_pay_now_link_proposal_is_accepted","test_a_valid_proposal_is_turned_into_a_plan","test_a_proposal_over_budget_is_rejected_so_the_fallback_is_used","test_a_proposal_pairing_a_pay_now_template_with_send_message_is_rejected","test_a_proposal_naming_a_template_outside_the_allowlist_is_rejected","test_free_text_never_reaches_a_customer","test_an_invented_action_type_is_rejected","test_an_absurd_delay_is_rejected","test_a_negative_delay_is_rejected","test_unparseable_output_is_rejected","test_plan_falls_back_to_the_deterministic_planner_when_the_proposal_is_unusable","test_plan_falls_back_when_there_is_no_client_at_all","test_a_zero_budget_class_cannot_be_talked_into_acting","test_a_proposal_exactly_on_budget_is_accepted","test_a_plan_that_stops_and_then_acts_is_rejected","test_a_stop_after_everything_else_is_fine","test_a_plan_of_only_a_stop_is_still_accepted","test_a_plan_that_buries_the_remedy_behind_a_notice_is_rejected","test_asking_for_the_new_card_first_is_accepted","test_a_dead_card_plan_is_scored_on_the_remedy_not_on_retries","test_a_better_schedule_is_adopted","test_a_plan_with_no_retries_is_not_scored_out_of_existence","test_free_text_is_replaced_by_the_approved_template_and_kept_in_the_record","test_free_text_with_no_approved_template_to_substitute_is_still_rejected","test_the_executor_has_no_path_to_the_suppressed_text","test_the_policy_rule_still_refuses_live_free_text"]}]},{"pkg":"policy","files":[{"file":"test_authorized.py","tests":["test_the_policy_engine_can_produce_one","test_the_constructor_always_refuses","test_the_constructor_refuses_positional_arguments_too","test_the_constructor_refuses_with_no_arguments","test_dataclasses_replace_cannot_swap_the_action_of_a_real_authorization","test_there_is_no_public_helper_that_authorizes_an_arbitrary_verdict","test_a_real_authorization_cannot_be_mutated","test_copying_an_authorization_does_not_let_it_be_repointed","test_a_denying_verdict_can_never_become_an_authorization","test_the_denied_path_returns_nothing_to_execute"]},{"file":"test_engine.py","tests":["test_a_compliant_action_is_authorized","test_a_denied_action_yields_no_authorization","test_the_first_failing_rule_is_the_one_reported","test_the_verdict_explains_itself_in_words_a_human_can_read","test_evaluation_short_circuits_at_the_first_denial"]},{"file":"test_rules.py","tests":["test_a_message_inside_the_window_is_allowed","test_a_message_at_three_in_the_morning_is_denied","test_a_message_at_seven_thirty_pm_is_denied","test_the_window_boundaries_are_inclusive_at_eight_and_exclusive_at_nineteen","test_a_charge_retry_at_three_in_the_morning_is_fine_nobody_is_woken_up","test_an_opted_out_customer_is_never_contacted","test_an_opted_out_customer_can_still_be_charged_under_a_live_mandate","test_two_contacts_inside_the_rate_limit_window_are_refused","test_a_contact_after_the_rate_limit_window_is_allowed","test_the_first_contact_is_never_rate_limited","test_a_template_off_the_allowlist_is_denied","test_a_message_with_no_template_at_all_is_denied","test_free_text_is_denied_even_alongside_a_valid_template","test_a_charge_needs_no_template","test_a_pay_now_template_sent_as_a_plain_message_is_denied","test_a_pay_now_link_using_the_pay_now_template_is_allowed","test_a_live_promise_to_pay_suppresses_both_contact_and_charge","test_an_expired_promise_to_pay_suppresses_nothing","test_a_charge_beyond_the_class_budget_is_denied","test_a_contact_beyond_the_class_budget_is_denied","test_a_dead_card_can_never_be_charged_however_the_plan_was_built","test_a_replacement_instrument_may_be_charged_once","test_a_replacement_instrument_may_not_be_charged_twice","test_the_bound_survives_a_caller_that_forgets_to_record_anything","test_a_second_genuine_replacement_is_chargeable_again","test_a_replacement_does_not_unlock_charging_for_a_risk_block","test_stopping_is_always_permitted_by_every_single_rule","test_escalating_to_a_human_is_also_permitted_by_every_rule","test_a_risk_block_is_not_undone_by_the_customer_adding_a_new_card","test_a_revoked_mandate_is_not_undone_by_the_customer_adding_a_new_card","test_a_naive_timestamp_is_refused_rather_than_assumed_to_be_local","test_a_time_inside_the_window_is_returned_unchanged","test_a_late_evening_contact_moves_to_the_next_morning","test_an_early_morning_contact_moves_to_opening_time_the_same_day","test_the_window_boundaries_reschedule_correctly","test_a_rescheduled_time_always_passes_the_rule_that_rejected_it","test_rescheduling_is_bounded_by_a_declared_cap","test_a_shortfall_may_be_offered_a_pay_now_link","test_an_unknown_cause_may_be_offered_a_pay_now_link","test_a_revoked_mandate_is_never_offered_a_pay_now_link","test_a_risk_decline_is_never_offered_another_route_to_pay","test_a_dead_card_gets_a_card_change_link_not_a_pay_now_link","test_an_issuer_outage_is_not_worth_bothering_the_customer_about","test_the_rule_ignores_every_other_action_type","test_the_rule_is_wired_into_the_engine"]}]},{"pkg":"razorpay","files":[{"file":"test_config.py","tests":["test_config_loads_from_the_environment","test_a_missing_credential_is_named_in_the_error[RAZORPAY_KEY_ID]","test_a_missing_credential_is_named_in_the_error[RAZORPAY_KEY_SECRET]","test_a_missing_credential_is_named_in_the_error[RAZORPAY_WEBHOOK_SECRET]","test_an_empty_credential_counts_as_missing","test_a_live_key_is_refused","test_test_mode_is_detected_from_the_key_prefix","test_secrets_never_appear_in_the_repr","test_secrets_never_appear_in_the_string_form","test_a_dotenv_file_is_read_without_exporting_anything","test_a_missing_dotenv_is_not_an_error","test_an_exported_variable_beats_a_stale_line_in_the_file","test_the_file_supplies_what_the_environment_lacks"]},{"file":"test_entity_shape_contract.py","tests":["test_the_recording_exists_and_covers_both_entities","test_the_recording_holds_no_values_only_names_and_types","test_production_never_reads_a_field_the_api_does_not_send[plan-['item']]","test_production_never_reads_a_field_the_api_does_not_send[subscription-['plan_id', 'custome]","test_the_fakes_invent_no_field_the_real_entity_lacks[subscription]","test_the_fakes_invent_no_field_the_real_entity_lacks[plan]","test_the_fakes_give_every_field_the_type_the_api_gives_it[subscription]","test_the_fakes_give_every_field_the_type_the_api_gives_it[plan]"]},{"file":"test_payment_links.py","tests":["test_a_link_is_created_with_delivery_off_by_default","test_delivery_must_be_asked_for_explicitly","test_the_writer_refuses_live_credentials","test_amounts_are_paise_and_never_rounded","test_cancel_reports_whether_the_link_actually_cancelled","test_a_created_link_is_recorded_in_the_audit_log","test_the_real_rail_never_claims_a_link_was_paid","test_a_subscription_with_no_contact_gets_no_link_and_no_guess","test_no_links_writer_means_no_link_is_attempted","test_a_missing_plan_id_is_never_guessed","test_the_writer_sees_the_real_amount_and_reference","test_the_rail_still_refuses_to_be_built_on_a_live_config","test_the_amount_is_read_through_the_plan_not_the_subscription","test_the_customer_contact_is_read_from_the_flat_subscription_fields","test_a_plan_that_cannot_be_fetched_yields_no_link_and_no_guess","test_a_missing_phone_is_omitted_not_sent_as_an_empty_string","test_a_missing_email_is_omitted_not_sent_as_an_empty_string","test_a_customer_with_no_name_anywhere_sends_no_name_key","test_a_full_contact_still_sends_every_field","test_declining_to_assert_payment_is_itself_recorded","test_the_delivery_record_does_not_appear_without_an_audit_log"]},{"file":"test_setup_script.py","tests":["test_the_setup_creates_a_plan_and_a_subscription","test_the_plan_is_created_in_paise_and_inr","test_the_plan_bills_monthly_so_a_retry_cycle_is_observable","test_the_subscription_references_the_new_plan","test_the_subscription_total_count_is_configurable","test_a_zero_or_negative_amount_is_refused","test_a_subscription_response_with_no_short_url_yields_an_empty_auth_url"]}]},{"pkg":"report","files":[{"file":"test_metrics.py","tests":["test_the_zero_retry_classes_are_the_three_a_retry_cannot_fix","test_terminal_states_are_counted","test_voluntary_churn_leaves_the_recovery_denominator","test_an_all_voluntary_cohort_reports_a_zero_rate_rather_than_dividing_by_zero","test_net_recovery_is_gross_minus_every_rupee_spent","test_attempts_per_recovery_uses_charge_attempts_only","test_attempts_per_recovery_is_zero_when_nothing_recovered","test_wasted_attempts_are_those_spent_on_causes_a_retry_cannot_fix","test_a_recovered_subject_never_counts_as_wasted","test_mean_time_to_recovery_is_measured_from_each_subjects_own_failure","test_mean_time_to_recovery_is_zero_when_nothing_recovered","test_the_comparison_states_money_and_rate_side_by_side","test_the_comparison_reports_attempts_saved_as_a_negative_delta","test_wasted_attempt_reduction_is_a_share_of_what_the_control_wasted","test_wasted_attempt_reduction_is_zero_when_the_control_wasted_nothing","test_efficiency_metrics_count_charges_and_ignore_messages","test_a_wasted_attempt_is_a_charge_not_a_message","test_money_is_broken_down_by_failure_class","test_every_class_appears_even_when_it_recovered_nothing","test_the_class_breakdown_sums_to_the_total","test_money_is_broken_down_by_the_mechanism_that_earned_it","test_an_unrecovered_subject_contributes_nothing_to_the_mechanism_breakdown","test_the_mechanism_breakdown_sums_to_the_total","test_money_is_available_per_failed_charge_not_only_in_total","test_per_subject_money_is_zero_rather_than_a_crash_on_an_empty_arm"]},{"file":"test_render.py","tests":["test_rupees_are_formatted_exactly[0-\\u20b90.00]","test_rupees_are_formatted_exactly[5-\\u20b90.05]","test_rupees_are_formatted_exactly[99900-\\u20b9999.00]","test_rupees_are_formatted_exactly[199900-\\u20b91,999.00]","test_rupees_are_formatted_exactly[100000000-\\u20b910,00,000.00]","test_rupees_are_formatted_exactly[-940--\\u20b99.40]","test_the_report_leads_with_money","test_the_report_names_both_arms","test_the_report_prints_every_band","test_the_report_states_whether_each_finding_survives","test_a_finding_that_does_not_survive_is_labelled_as_such","test_the_report_prints_the_declared_assumptions","test_the_report_prints_the_seed_and_the_configuration_hash","test_the_report_states_the_baseline_it_compared_against","test_the_report_never_claims_a_lift_the_sweep_rejected","test_the_bundle_writes_the_report_and_the_machine_readable_sweep","test_the_bundle_sweep_json_round_trips","test_the_bundle_exports_the_audit_trails_for_both_arms","test_the_report_says_which_cause_carries_the_lift","test_the_report_shows_how_far_up_the_ladder_recoveries_happened","test_the_report_shows_what_actually_earned_the_money","test_the_report_declares_the_pay_now_conversion_it_assumed","test_the_report_prints_the_measurement_inputs_hash","test_the_report_states_the_per_charge_economics"]}]},{"pkg":"scripts","files":[{"file":"test_build_console.py","tests":["test_the_headline_is_read_from_the_bundle_not_recomputed","test_every_cause_carries_an_explicit_sign","test_the_causes_where_it_loses_are_present_and_negative","test_the_grid_is_three_bands_by_four_cohorts","test_the_grid_marks_whether_each_cell_clears_the_target","test_a_cell_below_target_is_marked_as_missing_it","test_the_mechanism_split_sums_to_gross_recovered"]},{"file":"test_demo.py","tests":["test_the_demo_picks_the_most_recent_failed_payment","test_an_account_with_no_failed_payment_says_so_instead_of_inventing_one","test_the_narration_names_the_cause_the_plan_and_the_rule","test_the_narration_reads_only_what_the_log_recorded","test_a_dry_run_replays_the_recorded_transcript_without_a_network","test_the_link_is_still_created_when_the_demo_runs_after_hours"]},{"file":"test_replay.py","tests":["test_the_replay_is_in_recorded_order","test_every_block_names_the_rule_that_caused_it","test_a_subject_with_no_records_says_so_rather_than_printing_nothing"]},{"file":"test_run_experiment.py","tests":["test_a_freeze_records_the_measurement_inputs","test_an_edited_prompt_refuses_to_publish_and_names_itself","test_the_refusal_happens_before_the_experiment_runs","test_re_freezing_is_how_a_deliberate_change_is_registered","test_no_frozen_file_means_no_guard_to_trip"]},{"file":"test_scan.py","tests":["test_an_actionable_signal_is_labelled_actionable","test_an_unactionable_signal_is_shown_and_labelled_unhandled_not_hidden","test_every_signal_shows_kind_entity_amount_age_and_detail","test_the_total_at_risk_is_printed_using_format_rupees","test_main_prints_the_rendered_signals_without_touching_the_network","test_nothing_in_the_scan_script_can_write","test_a_single_signal_formats_kind_entity_amount_age_actionable_and_detail"]}]}]</script>
+<script>
+const BANDS={
+ low:{control:{recovered:685,rate:35.882661,gross:142581500,cost:1496400,net:141085100,attempts:4988,wasted:1797,apr:7.2818},
+      treatment:{recovered:855,rate:44.787847,gross:176814500,cost:994260,net:175820240,attempts:3128,wasted:1,apr:3.6585,
+                 mech:{retry:140632000,instrument_update:14692900,pay_now_link:21489600}}},
+ mid:{control:{recovered:878,rate:45.992666,gross:183562200,cost:1390200,net:182172000,attempts:4634,wasted:1782,apr:5.2779},
+      treatment:{recovered:1121,rate:58.721844,gross:231887900,cost:879530,net:231008370,attempts:2757,wasted:3,apr:2.4594,
+                 mech:{retry:173666400,instrument_update:25687400,pay_now_link:32534100}}},
+ high:{control:{recovered:1034,rate:54.164484,gross:217596600,cost:1302900,net:216293700,attempts:4343,wasted:1758,apr:4.2002},
+       treatment:{recovered:1363,rate:71.398638,gross:283013700,cost:767490,net:282246210,attempts:2395,wasted:6,apr:1.7572,
+                 mech:{retry:195606300,instrument_update:38431200,pay_now_link:48976200}}}
+};
+const ABL=[{seed:3,shipped:27.56,matched:25.17},{seed:11,shipped:30.66,matched:26.73},
+           {seed:29,shipped:29.58,matched:27.19},{seed:47,shipped:26.30,matched:24.32}];
+const TEAL='#0d9488',INDIGO='#4338ca',ORANGE='#c2410c',INK='#3f3f46',MUTED='#71717a';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const NS='http://www.w3.org/2000/svg';
+
+/* ---- Indian-grouped currency ---- */
+function inGroup(n){
+  const s=String(Math.round(Math.abs(n)));
+  if(s.length<=3)return s;
+  let rest=s.slice(0,-3),out=',' + s.slice(-3);
+  while(rest.length>2){out=','+rest.slice(-2)+out;rest=rest.slice(0,-2);}
+  return rest+out;
+}
+const rupees=p=>'₹'+inGroup(p/100);
+const lakh=p=>'₹'+(p/10000000).toFixed(2)+'L';
+const pct=n=>n.toFixed(1)+'%';
+
+/* ---- tooltip ---- */
+const tip=$('#tip');
+function bindTip(el,html){
+  el.addEventListener('pointerenter',()=>{tip.innerHTML=html;tip.style.opacity='1';});
+  el.addEventListener('pointermove',e=>{
+    const r=tip.getBoundingClientRect();
+    tip.style.left=Math.max(8,Math.min(e.clientX+14,innerWidth-r.width-8))+'px';
+    tip.style.top=Math.max(8,e.clientY-r.height-12)+'px';});
+  el.addEventListener('pointerleave',()=>{tip.style.opacity='0';});
+}
+function el(svg,name,attrs,text){
+  const e=document.createElementNS(NS,name);
+  for(const k in attrs)e.setAttribute(k,attrs[k]);
+  if(text!==undefined)e.textContent=text;
+  svg.appendChild(e);return e;
+}
+/* round an axis maximum up to a step that divides into four readable ticks */
+function niceMax(v){
+  const raw=v/4, mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const step=[1,1.5,2,2.5,3,4,5,6,8,10].find(m=>m*mag>=raw)*mag;
+  return step*4;
+}
+function roundTop(x,y,w,h,r){
+  r=Math.min(r,h,w/2);
+  return 'M'+x+','+(y+h)+'V'+(y+r)+'a'+r+','+r+' 0 0 1 '+r+',-'+r+
+         'h'+(w-2*r)+'a'+r+','+r+' 0 0 1 '+r+','+r+'V'+(y+h)+'Z';
+}
+
+/* ---- KPI tiles ---- */
+function kpis(band){
+  const c=BANDS[band].control,t=BANDS[band].treatment;
+  const rows=[
+    {k:'Net recovered',v:rupees(t.net),base:'baseline '+rupees(c.net),
+     chip:'+'+rupees(t.net-c.net)+' · +'+((t.net/c.net-1)*100).toFixed(1)+'%',dir:'up'},
+    {k:'Recovery rate',v:pct(t.rate),base:'baseline '+pct(c.rate),
+     chip:'+'+(t.rate-c.rate).toFixed(1)+'pp',dir:'up'},
+    {k:'Customers recovered',v:inGroup(t.recovered),base:'baseline '+inGroup(c.recovered)+' of 1,909',
+     chip:'+'+(t.recovered-c.recovered)+' people',dir:'up'},
+    {k:'Cost of chasing',v:rupees(t.cost),base:'baseline '+rupees(c.cost),
+     chip:'−'+((1-t.cost/c.cost)*100).toFixed(1)+'%',dir:'down'},
+    {k:'Wasted attempts',v:inGroup(t.wasted),base:'baseline '+inGroup(c.wasted),
+     chip:'−'+((1-t.wasted/c.wasted)*100).toFixed(1)+'%',dir:'down'}
+  ];
+  $('#kpis').innerHTML=rows.map(r=>'<div class="kpi"><div class="k">'+r.k+'</div>'+
+    '<div class="v num">'+r.v+'</div><div class="base num">'+r.base+'</div>'+
+    '<span class="chip '+r.dir+' num">'+r.chip+'</span></div>').join('');
+}
+
+/* ---- grouped bar across the three bands ---- */
+function groupedBar(sel,pick,fmt,axisFmt,unit){
+  const svg=$(sel);svg.innerHTML='';
+  const W=520,H=250,L=46,R=14,T=20,B=36,keys=['low','mid','high'];
+  const names={low:'Low',mid:'Mid',high:'High'};
+  const max=niceMax(Math.max(...keys.flatMap(b=>[pick(BANDS[b].control),pick(BANDS[b].treatment)]))*1.14);
+  const y=v=>H-B-(v/max)*(H-B-T);
+  for(let i=0;i<=4;i++){
+    const v=max*i/4;
+    el(svg,'line',{x1:L,x2:W-R,y1:y(v),y2:y(v),class:'gridline'});
+    el(svg,'text',{x:L-9,y:y(v)+4,'text-anchor':'end',fill:MUTED,'font-size':11},axisFmt(v));
+  }
+  const gw=(W-L-R)/3,bw=Math.min(48,gw*0.30),gap=7;
+  keys.forEach((b,i)=>{
+    const cx=L+gw*i+gw/2;
+    [['control',INDIGO,'Baseline ladder'],['treatment',TEAL,'Recoup']].forEach(([arm,col,label],j)=>{
+      const v=pick(BANDS[b][arm]),x=cx-bw-gap/2+j*(bw+gap),h=Math.max(2,H-B-y(v));
+      const p=el(svg,'path',{d:roundTop(x,y(v),bw,h,4),fill:col,class:'bar'});
+      bindTip(p,'<b>'+names[b]+' band · '+label+'</b><br><span class="t-num">'+fmt(v)+'</span> '+unit);
+      el(svg,'text',{x:x+bw/2,y:y(v)-7,'text-anchor':'middle',fill:INK,'font-size':11.5,
+        'font-weight':600,style:'font-variant-numeric:tabular-nums'},fmt(v));
+    });
+    el(svg,'text',{x:cx,y:H-13,'text-anchor':'middle',fill:MUTED,'font-size':11},names[b]+' band');
+  });
+  el(svg,'line',{x1:L,x2:W-R,y1:H-B,y2:H-B,stroke:'#d4d4d8','stroke-width':1});
+}
+
+/* ---- stacked: gross recovered by mechanism ---- */
+function mechChart(band){
+  const svg=$('#c-mech');svg.innerHTML='';
+  const c=BANDS[band].control,t=BANDS[band].treatment;
+  const W=520,H=250,L=48,R=76,T=22,B=36;
+  const arms=[{label:'Baseline ladder',seg:[['Retry',c.gross,INDIGO]]},
+              {label:'Recoup',seg:[['Retry',t.mech.retry,INDIGO],
+                                   ['Card-update request',t.mech.instrument_update,TEAL],
+                                   ['Pay-now link',t.mech.pay_now_link,ORANGE]]}];
+  const max=niceMax(Math.max(c.gross,t.gross)*1.02);
+  const y=v=>H-B-(v/max)*(H-B-T);
+  for(let i=0;i<=4;i++){
+    const v=max*i/4;
+    el(svg,'line',{x1:L,x2:W-R,y1:y(v),y2:y(v),class:'gridline'});
+    el(svg,'text',{x:L-9,y:y(v)+4,'text-anchor':'end',fill:MUTED,'font-size':11},
+      '₹'+(v/10000000).toFixed(0)+'L');
+  }
+  const gw=(W-L-R)/2,bw=Math.min(78,gw*0.52);
+  arms.forEach((a,i)=>{
+    const x=L+gw*i+gw/2-bw/2;let acc=0;
+    a.seg.forEach(([nm,v,col],k)=>{
+      const top=k===a.seg.length-1;
+      const y0=y(acc+v),h=Math.max(2,y(acc)-y0-(k?2:0));
+      const p=el(svg,'path',{d:top?roundTop(x,y0,bw,h,4):'M'+x+','+y0+'h'+bw+'v'+h+'h-'+bw+'Z',
+        fill:col,class:'bar'});
+      bindTip(p,'<b>'+a.label+' · '+nm+'</b><br><span class="t-num">'+rupees(v)+
+        '</span> gross recovered');
+      /* one-segment bars carry their number on top already; only split bars need per-segment labels */
+      if(a.seg.length>1)el(svg,'text',{x:x+bw+9,y:y0+Math.max(h,11)/2+4,fill:INK,'font-size':11,
+        'font-weight':600,style:'font-variant-numeric:tabular-nums'},lakh(v));
+      acc+=v;
+    });
+    el(svg,'text',{x:x+bw/2,y:y(acc)-9,'text-anchor':'middle',fill:'#18181b','font-size':12.5,
+      'font-weight':700,style:'font-variant-numeric:tabular-nums'},lakh(acc));
+    el(svg,'text',{x:x+bw/2,y:H-13,'text-anchor':'middle',fill:MUTED,'font-size':11},a.label);
+  });
+  el(svg,'line',{x1:L,x2:W-R,y1:H-B,y2:H-B,stroke:'#d4d4d8','stroke-width':1});
+}
+
+/* ---- ablation: one row per cohort, shipped vs schedule-matched ---- */
+function ablChart(){
+  const svg=$('#c-abl');svg.innerHTML='';
+  const W=520,H=232,L=68,R=80,T=16,B=36,min=21,max=32.5;
+  const x=v=>L+((v-min)/(max-min))*(W-L-R);
+  for(let v=22;v<=32;v+=2){
+    el(svg,'line',{x1:x(v),x2:x(v),y1:T,y2:H-B,class:'gridline'});
+    el(svg,'text',{x:x(v),y:H-15,'text-anchor':'middle',fill:MUTED,'font-size':11},'+'+v+'%');
+  }
+  const rowH=(H-B-T)/ABL.length;
+  ABL.forEach((d,i)=>{
+    const cy=T+rowH*i+rowH/2;
+    el(svg,'text',{x:L-14,y:cy+4,'text-anchor':'end',fill:MUTED,'font-size':11},'cohort '+d.seed);
+    el(svg,'text',{x:x(d.shipped)+14,y:cy+4,'text-anchor':'start',fill:INK,'font-size':11,
+      'font-weight':600,style:'font-variant-numeric:tabular-nums'},
+      (d.matched/d.shipped*100).toFixed(0)+'% kept');
+    el(svg,'line',{x1:x(d.matched),x2:x(d.shipped),y1:cy,y2:cy,stroke:'#d4d4d8','stroke-width':2,
+      'stroke-linecap':'round'});
+    [[d.matched,ORANGE,'Schedule-matched'],[d.shipped,TEAL,'As shipped']].forEach(([v,col,nm])=>{
+      const p=el(svg,'circle',{cx:x(v),cy:cy,r:6,fill:col,stroke:'#ffffff','stroke-width':2,class:'bar'});
+      bindTip(p,'<b>Cohort seed '+d.seed+' · '+nm+'</b><br>net lift <span class="t-num">+'+
+        v.toFixed(2)+'%</span>');
+    });
+  });
+  el(svg,'line',{x1:L,x2:W-R,y1:H-B,y2:H-B,stroke:'#d4d4d8','stroke-width':1});
+  el(svg,'text',{x:(L+W-R)/2,y:H-2,'text-anchor':'middle',fill:MUTED,'font-size':11},
+    'net recovered lift over the baseline ladder');
+}
+
+function render(band){
+  kpis(band);
+  mechChart(band);
+  groupedBar('#c-rate',a=>a.rate,v=>v.toFixed(1)+'%',v=>v.toFixed(0)+'%','of involuntary failures recovered');
+  groupedBar('#c-eff',a=>a.apr,v=>v.toFixed(2),v=>v.toFixed(1),'charge attempts per recovery');
+  ablChart();
+}
+$$('.seg [data-band]').forEach(b=>b.addEventListener('click',()=>{
+  $$('.seg [data-band]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));
+  render(b.dataset.band);
+}));
+render('mid');
+
+/* ---- test suite drill-in ---- */
+const TESTS=JSON.parse($('#testdata').textContent);
+const countOf=p=>p.files.reduce((m,f)=>m+f.tests.length,0);
+const total=TESTS.reduce((n,p)=>n+countOf(p),0);
+const maxPkg=Math.max(...TESTS.map(countOf));
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function hl(s,n){
+  if(!n)return s;
+  const i=s.toLowerCase().indexOf(n);
+  return i<0?s:s.slice(0,i)+'<mark>'+s.slice(i,i+n.length)+'</mark>'+s.slice(i+n.length);
+}
+function paint(q){
+  const needle=q.trim().toLowerCase();
+  let shown=0;
+  const html=TESTS.map(p=>{
+    const files=p.files.map(f=>({file:f.file,tests:needle
+      ? f.tests.filter(t=>t.toLowerCase().includes(needle)||f.file.toLowerCase().includes(needle)||p.pkg.includes(needle))
+      : f.tests})).filter(f=>f.tests.length);
+    const n=files.reduce((m,f)=>m+f.tests.length,0);
+    if(!n)return '';
+    shown+=n;
+    const body=files.map(f=>'<div class="filegrp"><div class="filename">'+esc(f.file)+
+      '<em>'+f.tests.length+' test'+(f.tests.length>1?'s':'')+'</em></div><ul class="tests">'+
+      f.tests.map(t=>'<li>'+hl(esc(t),needle)+'</li>').join('')+'</ul></div>').join('');
+    return '<details class="pkg"'+(needle?' open':'')+'><summary>'+
+      '<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '+
+      'stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'+
+      '<span class="pkgname">'+p.pkg+'</span>'+
+      '<span class="meter"><i style="width:'+(n/maxPkg*100).toFixed(1)+'%"></i></span>'+
+      '<span class="pkgcount num">'+n+' test'+(n>1?'s':'')+'</span>'+
+      '<span class="pkgfiles num">'+files.length+' file'+(files.length>1?'s':'')+'</span>'+
+      '</summary><div class="pkgbody">'+body+'</div></details>';
+  }).join('');
+  $('#pkglist').innerHTML=html||'<p class="empty">No test name contains that.</p>';
+  $('#qcount').textContent=needle
+    ? shown+' of '+total+' tests match'
+    : total+' tests across '+TESTS.length+' packages';
+}
+let qt;
+$('#q').addEventListener('input',e=>{clearTimeout(qt);qt=setTimeout(()=>paint(e.target.value),120);});
+paint('');
+
+/* ---- the flow ---- */
+const ICONS={
+ fail:'<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+ classify:'<path d="M3 6h18"/><path d="M7 12h10"/><path d="M11 18h2"/>',
+ plan:'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+ gate:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+ exec:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+ money:'<path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3a4.5 4.5 0 1 0 0-9"/>',
+ stop:'<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/>'
+};
+const CASES=[
+ {steps:[
+  {ic:'fail',nm:'Failure',dt:'webhook, signature verified',badge:'ingest',
+   cap:'Razorpay posts <code>subscription.charged.failed</code>. The signature is verified before anything is read. The detection scanner would produce the identical <code>FailureEvent</code>, and nothing downstream may branch on which of the two produced it.'},
+  {ic:'classify',nm:'Classify',dt:'INSUFFICIENT_FUNDS',badge:'classify',
+   cap:'The decline reason resolves to <code>INSUFFICIENT_FUNDS</code>. The customer was short of money rather than holding a dead card — a retry has a mechanism behind it here, and so does a link.'},
+  {ic:'plan',nm:'Plan',dt:'notify → retry → pay-now link',badge:'plan',
+   cap:'The ladder for this cause: notify, retry at 24h, a pay-now link at 25h, then retry at 72h and 120h. Those later retries are worth about 9% of the lift — the ablation above is what says so.'},
+  {ic:'gate',nm:'Policy gate',dt:'six rules, all pass',badge:'policy',
+   cap:'Contact window, contact rate limit, template allowlist, opt-out stop, per-class retry budget, promise-to-pay suppression. Unauthorized execution is untypeable rather than merely unchecked — <code>policy/authorized.py</code>, 59 lines.'},
+  {ic:'exec',nm:'Execute',dt:'a live payment link',badge:'execute',
+   cap:'A real Razorpay payment link is created and the message goes out. Every action is written to the audit log first, and webhook events dedupe against that log — so a restart or a redeploy cannot double-charge.'},
+  {ic:'money',nm:'Recovered',dt:'₹17,36,664 via retry',badge:'report',
+   cap:'In the mid band, 1,121 of 1,909 involuntary failures come back: 58.7% against the baseline ladder’s 46.0%, at 36.7% less cost of chasing.'}]},
+ {steps:[
+  {ic:'fail',nm:'Failure',dt:'webhook, signature verified',badge:'ingest',
+   cap:'The same event shape with a different reason string. Nothing about intake changes — the branch happens once, downstream, where a test can pin it.'},
+  {ic:'classify',nm:'Classify',dt:'INSTRUMENT_INVALID',badge:'classify',
+   cap:'The card is dead. Retrying it is spend with no mechanism behind it: the same charge against the same expired instrument, three more times, on a schedule.'},
+  {ic:'plan',nm:'Plan',dt:'ask for a new card',badge:'plan',
+   cap:'The ladder never retries. It asks for a replacement instrument and then sends one final notice. This is a channel a retry schedule has no way to offer, because it has only one verb.'},
+  {ic:'gate',nm:'Policy gate',dt:'card-update template only',badge:'policy',
+   cap:'A new instrument is not a retry of the old one, so the per-class retry budget — which exists to stop hammering the instrument that already failed — does not apply. Each replacement is chargeable exactly once, enforced by identity rather than by a count the caller keeps.'},
+  {ic:'exec',nm:'Execute',dt:'update request sent',badge:'execute',
+   cap:'₹2,56,874 of the mid-band recovery arrives this way — money the baseline ladder cannot reach at all.'},
+  {ic:'money',nm:'Recovered',dt:'3 wasted attempts, not 1,782',badge:'report',
+   cap:'The baseline spends 1,782 wasted attempts per 2,000 failures. Recoup spends 3. That gap is almost entirely this branch and the next one.'}]},
+ {steps:[
+  {ic:'fail',nm:'Failure',dt:'webhook, signature verified',badge:'ingest',
+   cap:'The charge failed because the customer withdrew consent. At intake the event looks like any other failure.'},
+  {ic:'classify',nm:'Classify',dt:'MANDATE_REVOKED',badge:'classify',
+   cap:'Consent is gone. Everything after this point is a compliance position rather than an optimisation.'},
+  {ic:'plan',nm:'Plan',dt:'stop',badge:'plan',
+   cap:'The ladder is empty. No retry, no notification, no link. The baseline would charge this customer three more times and message them once.'},
+  {ic:'gate',nm:'Policy gate',dt:'nothing to authorize',badge:'policy',
+   cap:'There is no action to gate, which is the point — the refusal happened in planning, and the gate would have denied it anyway had planning been wrong. Two independent places have to fail before this customer is charged.'},
+  {ic:'stop',nm:'Halt',dt:'never charges, never messages',badge:'escalate',stop:true,
+   cap:'This is the one branch that makes the product look worse on paper. It is also the one a payments company cannot ship without.'},
+  {ic:'money',nm:'Recorded',dt:'audited, not recovered',badge:'audit',
+   cap:'The decision is written to the audit log with its reason, so a stopped mandate is replayable months later — <code>python -m scripts.replay sub_0429</code>.'}]}
+];
+let curCase=0,step=0,timer=null;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function buildTrack(){
+  $('#track').innerHTML=CASES[curCase].steps.map((s,i)=>
+    '<div class="node"><span class="step">'+(i+1)+'</span>'+
+    '<div class="ring"><svg viewBox="0 0 24 24">'+ICONS[s.ic]+'</svg></div>'+
+    '<div class="nm">'+s.nm+'</div><div class="dt">'+s.dt+'</div></div>').join('');
+  $$('#track .node').forEach((n,i)=>n.addEventListener('click',()=>{clearInterval(timer);show(i);}));
+}
+function show(i){
+  step=i;
+  const steps=CASES[curCase].steps;
+  $$('#track .node').forEach((n,k)=>{
+    n.classList.toggle('on',k===i);
+    n.classList.toggle('done',k<i);
+    n.classList.toggle('stop',k===i&&!!steps[k].stop);
+  });
+  $('#fbadge').textContent=steps[i].badge;
+  $('#fcap').innerHTML=steps[i].cap;
+}
+function play(){
+  clearInterval(timer);
+  show(0);
+  if(reduce){
+    $$('#track .node').forEach(n=>n.classList.add('done'));
+    show(CASES[curCase].steps.length-1);
+    return;
+  }
+  timer=setInterval(()=>show((step+1)%CASES[curCase].steps.length),2800);
+}
+$$('.caseseg [data-case]').forEach(b=>b.addEventListener('click',()=>{
+  $$('.caseseg [data-case]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));
+  curCase=+b.dataset.case;buildTrack();play();
+}));
+$('#replay').addEventListener('click',play);
+buildTrack();play();
+</script>
+</body>
+</html>

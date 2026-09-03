@@ -38,6 +38,10 @@ python -m scripts.scan          # go looking for revenue at risk, read-only
 python -m scripts.replay sub_0429 --audit-db artifacts/audit/mid/treatment.db
 ```
 
+📊 **[Dashboard](site/index.html)** — the results, all 681 test names, and the failure-to-recovery
+flow, in one page. Open the file directly, or `python -m http.server -d site`. Deployed on Vercel
+from `site/`; see [Hosting](#hosting).
+
 📄 **[One-page judge summary](https://claude.ai/code/artifact/a42011e0-b5de-4a2c-857a-eabb5ae73ab4)** · 🎤 [Five-minute pitch order](docs/pitch.md) · 📓 [Decision log, 68 entries](docs/decisions.md)
 
 ---
@@ -505,6 +509,23 @@ session timeline is at [`docs/journey-into-recoup.md`](docs/journey-into-recoup.
 
 ---
 
+## Hosting
+
+The dashboard is one static file with no build step, so Vercel needs no framework and no
+install. `vercel.json` points it at `site/`, which holds nothing but the page.
+
+```bash
+npx vercel login          # once, interactive
+npx vercel --prod         # from the repo root
+```
+
+Or import `distinguishedape/recoup` at [vercel.com/new](https://vercel.com/new) and accept the
+defaults — `vercel.json` supplies them. If the import screen asks anyway, the answers are
+Framework **Other**, Build Command **none**, Output Directory **`site`**. Every push to `main`
+then redeploys.
+
+Nothing else in the repo is served: the deployment contains `site/` and no other directory.
+
 ## Layout
 
 | Path | What's in it |
@@ -515,3 +536,4 @@ session timeline is at [`docs/journey-into-recoup.md`](docs/journey-into-recoup.
 | `evidence/` | The generated bundle: report, sweep, replication, audit CSVs, console, schedule ablation |
 | `docs/decisions.md` | Every problem hit, what was chosen, and what it costs if wrong |
 | `docs/pitch.md` | The five-minute running order |
+| `site/index.html` | The dashboard — results by band, the test suite, the flow. One static file, no build |

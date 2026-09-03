@@ -13,3 +13,6 @@ docs/superpowers/
 
 # Generated knowledge graph (rebuild with /graphify)
 graphify-out/
+
+# Working notes between sessions, not part of the submission
+handoff.md
